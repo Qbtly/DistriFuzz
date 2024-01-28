@@ -1,0 +1,39 @@
+{
+  "obj": "arr2",
+  "objtype": "Array",
+  "methods": [
+    "constructor",
+    "concat",
+    "find",
+    "findIndex",
+    "pop",
+    "push",
+    "shift",
+    "unshift",
+    "slice",
+    "splice",
+    "includes",
+    "indexOf",
+    "keys",
+    "entries",
+    "forEach",
+    "filter",
+    "map",
+    "every",
+    "some",
+    "reduce",
+    "reduceRight",
+    "toString",
+    "toLocaleString",
+    "join",
+    "reverse",
+    "sort",
+    "lastIndexOf",
+    "copyWithin",
+    "fill",
+    "values"
+  ],
+  "attrs": {
+    "length": "number"
+  }
+}

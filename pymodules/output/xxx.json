@@ -1,0 +1,14 @@
+{
+  "obj": "xxx",
+  "objtype": "Number",
+  "methods": [
+    "constructor",
+    "toExponential",
+    "toFixed",
+    "toPrecision",
+    "toString",
+    "valueOf",
+    "toLocaleString"
+  ],
+  "attrs": {}
+}
