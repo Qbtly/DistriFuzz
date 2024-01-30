@@ -12,6 +12,14 @@ class JavaScriptParserVisitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by JavaScriptParser#program.
     def visitProgram(self, ctx:JavaScriptParser.ProgramContext):
+        if ctx!=None and ctx.start!=None and ctx.stop!=None:
+            interval = ctx.getSourceInterval()
+            if not ctx.start.start > ctx.stop.stop:
+                if interval not in config.intervals[ctx.getRuleIndex()]:
+                    config.intervals[ctx.getRuleIndex()].append(interval)
+                text = ctx.start.getTokenSource().inputStream.getText(ctx.start.start, ctx.stop.stop)
+                if ctx.stop.stop-ctx.start.start < config.token_size and text not in config.texts[ctx.getRuleIndex()]:
+                    config.texts[ctx.getRuleIndex()].append(text)
         return self.visitChildren(ctx)
 
 

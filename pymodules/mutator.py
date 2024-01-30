@@ -218,11 +218,11 @@ if __name__ == '__main__':
     print(length)
     if length > 0:
         for i in range(0, length):
-            with open("/home/b/crossover/custom_mutators/examples/new_samples/"+str(i)+".js", "w") as f:
-                f.write(fuzz().decode())
-                f.close()
-            # print(fuzz().decode())
-            # print("=============================")
+        #     with open("/home/b/crossover/custom_mutators/examples/new_samples/"+str(i)+".js", "w") as f:
+        #         f.write(fuzz().decode())
+        #         f.close()
+            print(fuzz().decode())
+            print("=============================")
 
 
 # Uncomment and implement the following methods if you want to use a custom

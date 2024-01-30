@@ -105,7 +105,7 @@ builtins = ["Array", "ArrayBuffer", "AggregateError", "apply", "abs", "acos", "a
 "%IsBeingInterpreted", "%IsWasmCode", "%SerializeWasmModule", "%DeserializeWasmModule", "%EnableCodeLoggingForTesting", "%IsThreadInWasm",
 "%WasmTierUpFunction", "%IsLiftoffFunction"]
 
-token_size = 20
+token_size = 200
 sample_size = 10000
 train = False
 
