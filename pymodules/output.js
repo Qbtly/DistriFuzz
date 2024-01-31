@@ -59,7 +59,7 @@ function setReplacer(key, value) {
 }
 let output = [];
 /////////////////////////////////////////////////////////////////////////////////////
-let variableNames = ['v2', 'v4']
+let variableNames = ['v4', 'v2']
     
     const v2 = new Array(2);
     const v4 = new String("A String object");

@@ -116,7 +116,7 @@ console.log("[" + output.join(",\n") + "]");
     cmd = ["/home/qbtly/Desktop/target/V8/v8/0124/d8", "output.js"]
     result = subprocess.run(cmd, capture_output=True, text=True)
     var_dict = json.loads(result.stdout)
-    print(result.stdout)
+    # print(result.stdout)
     # [
     # {"obj": "v1",
     # "objtype": "Array",
@@ -127,21 +127,24 @@ console.log("[" + output.join(",\n") + "]");
     return var_dict
 
 
-def get_call_statements(array_methods):
+def get_call_statements(array_methods, obj_type):
+    # array_methods ==> var_dict["methods"]
     call_statements = []
+    typed_methods = basic.methods[obj_type]
+    all = list(typed_methods.items())
+    b = list(typed_methods.keys())
+    for a in all:
+        args = ", ".join(a[1])
+        call_statement = f"{a[0]}({args});"
+        call_statements.append(call_statement)
     for method in array_methods:
-        if method in basic.array_methods.keys():
-            chosen_variable = random.choice(variables)
-            chosen_type = random.choice(["methods", "attrs"])
-            chosen_method_or_attr = random.choice(list(chosen_variable[chosen_type].items()))
-
-            # 构造调用语句
-            if chosen_type == "methods":
-                args_string = ", ".join(chosen_method_or_attr[1])
-                js_call_snippet = f"{chosen_variable['name']}.{chosen_method_or_attr[0]}({args_string});"
-            else:
-                js_call_snippet = f"{chosen_variable['name']}.{chosen_method_or_attr[0]};"
-
+        if method not in b:
+            # args_arr = basic.array_methods[method]
+            # args = ", ".join(args_arr[1])
+            # args = ""
+            # call_statement = f"{method}({args});"
+            call_statements.append(f"{method}()")
+            print(method)
         #     # 这些方法通常需要一个回调函数作为参数
         #     call_statements.append(f"{method}(element => element > 0)")
         # elif method in ["push", "unshift"]:
@@ -159,9 +162,9 @@ def get_call_statements(array_methods):
         # elif method == "sort":
         #     # sort 方法可以带有一个比较函数作为参数
         #     call_statements.append(f"{method}((a, b) => a - b)")
-        else:
-            # 对于其他方法，我们暂时不添加特定参数
-            call_statements.append(f"{method}()")
+        # else:
+        #     # 对于其他方法，我们暂时不添加特定参数
+        #     call_statements.append(f"{method}()")
     # 输出生成的调用语句
     # for statement in call_statements:
     #     print(statement)
@@ -176,24 +179,20 @@ def get_property_call(var_dicts):
     new_var = new_var + str(i)
 
     chosen_obj = random.choice(var_dicts)
-
-    chosen_feature_type = random.choice(["methods", "attrs"])
-
-    if chosen_feature_type == "methods":
+    chosen_type = random.choice(["methods", "attrs"])
+    if chosen_type == "methods":
         call_statement = random.choice(chosen_obj["methods"])
         call_statement = f"\nlet {new_var} = {chosen_obj['obj']}.{call_statement};\n"
     else:
-        chosen_attr = random.choice(list(chosen_obj[chosen_feature_type].keys()))
+        chosen_attr = random.choice(list(chosen_obj[chosen_type].keys()))
         call_statement = f"\nlet {new_var} = {chosen_obj['obj']}.{chosen_attr};\n"
 
     return chosen_obj['obj'], call_statement
 
 
-def mutate(rewriter, var_dict):
+def generator(rewriter, var_dict):
     # 生成一条方法调用
-
     var_name, new_statement = get_property_call(var_dict)
-
     #位置
     prefix = ""
     interval = (0, 0)
@@ -212,6 +211,19 @@ def mutate(rewriter, var_dict):
     return new_sample
 
 
+def insert(rewriter, all_type):
+    pass
+
+
+def change(rewriter, all_type):
+    type = random.choice(all_type)
+    interval = config.intervals[type]
+    text = config.texts[type]
+    rewriter.replace("default", interval[0], interval[1], text.strip())
+    new_sample = rewriter.getText("default", 0, 10000)
+    # new_sample = rewriter.getDefaultText()
+    return new_sample
+
 def fuzz():
     if len(config.new_samples) > 0:
         sample = config.new_samples.pop(0)
@@ -223,35 +235,38 @@ def fuzz():
 def parse(js_code, add_buf):
     rewriter = pre_process(js_code.encode())
     var_dicts = get_property(js_code, list(VariableNames))
-    exit(0)
-    for var_dict in var_dicts:
-        var_dict["methods"] = get_call_statements(var_dict["methods"])
-        # var_dict["attrs"]
 
+    for var_dict in var_dicts:
+        obj_type = var_dict["objtype"]
+        var_dict["methods"] = get_call_statements(var_dict["methods"], obj_type)
+        # var_dict["attrs"]
+    print(var_dicts)
     all_type = init2()
-    # for t in [65, 73, 76, 80, 65, 73, 76, 80, 65, 73, 76, 80, 81]:
-    #     all_type.append(t)
-    count = 0
-    change_p = 0.9
+    for t in [65, 73, 76, 80, 65, 73, 76, 80, 65, 73, 76, 80, 81]:
+        all_type.append(t)
     new_sample = ""
 
+    count = 0
+    change_p = 0.9
     while count < config.sample_size:
+        count += 1  # 增加迭代计数
         rewriter.rollback(rewriter.lastRewriteTokenIndex(), "default")
         ran = random.random()
         if ran < change_p:
             # 生成
-            new_sample = mutate(rewriter, var_dicts)
-
+            new_sample = generator(rewriter, var_dicts)
         elif change_p < ran < 1.0:
-            pass
+            # 插入
+            new_sample = insert(rewriter, all_type)
         else:
-            pass
+            # 更改
+            new_sample = change(rewriter, all_type)
 
         if new_sample not in config.new_samples:
             config.new_samples.append(new_sample)
             if len(config.new_samples) > config.sample_size:
                 return len(config.new_samples)
-        count += 1  # 增加迭代计数
+
         # print('===========================')
         # new_sample = rewriter.getDefaultText()
         # print(new_sample)
@@ -301,8 +316,118 @@ if __name__ == '__main__':
     print(length)
     if length > 0:
         for i in range(0, length):
-            with open("/home/qbtly/Desktop/aaaaa/b" + str(i) + ".js", "w") as f:
+            with open("/home/qbtly/Desktop/aaaaa/b/" + str(i) + ".js", "w") as f:
                 f.write(fuzz().decode())
                 f.close()
             # print(fuzz().decode())
             # print("=============================")
+
+
+# [{
+#   "obj": "v2",
+#   "objtype": "Array",
+#   "methods": [
+#     "constructor",
+#     "at",
+#     "concat",
+#     "copyWithin",
+#     "fill",
+#     "find",
+#     "findIndex",
+#     "findLast",
+#     "findLastIndex",
+#     "lastIndexOf",
+#     "pop",
+#     "push",
+#     "reverse",
+#     "shift",
+#     "unshift",
+#     "slice",
+#     "sort",
+#     "splice",
+#     "includes",
+#     "indexOf",
+#     "join",
+#     "keys",
+#     "entries",
+#     "values",
+#     "forEach",
+#     "filter",
+#     "flat",
+#     "flatMap",
+#     "map",
+#     "every",
+#     "some",
+#     "reduce",
+#     "reduceRight",
+#     "toReversed",
+#     "toSorted",
+#     "toSpliced",
+#     "with",
+#     "toLocaleString",
+#     "toString"
+#   ],
+#   "attrs": {
+#     "length": "number"
+#   }
+# },
+# {
+#   "obj": "v4",
+#   "objtype": "String",
+#   "methods": [
+#     "constructor",
+#     "anchor",
+#     "at",
+#     "big",
+#     "blink",
+#     "bold",
+#     "charAt",
+#     "charCodeAt",
+#     "codePointAt",
+#     "concat",
+#     "endsWith",
+#     "fontcolor",
+#     "fontsize",
+#     "fixed",
+#     "includes",
+#     "indexOf",
+#     "isWellFormed",
+#     "italics",
+#     "lastIndexOf",
+#     "link",
+#     "localeCompare",
+#     "match",
+#     "matchAll",
+#     "normalize",
+#     "padEnd",
+#     "padStart",
+#     "repeat",
+#     "replace",
+#     "replaceAll",
+#     "search",
+#     "slice",
+#     "small",
+#     "split",
+#     "strike",
+#     "sub",
+#     "substr",
+#     "substring",
+#     "sup",
+#     "startsWith",
+#     "toString",
+#     "toWellFormed",
+#     "trim",
+#     "trimStart",
+#     "trimLeft",
+#     "trimEnd",
+#     "trimRight",
+#     "toLocaleLowerCase",
+#     "toLocaleUpperCase",
+#     "toLowerCase",
+#     "toUpperCase",
+#     "valueOf"
+#   ],
+#   "attrs": {
+#     "length": "number"
+#   }
+# }]

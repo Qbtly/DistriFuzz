@@ -1,5 +1,5 @@
 # 定义 JavaScript Array 和 String 方法及示例参数
-array_methods = {
+methods = {"Array" : {
     "constructor": [],
     "at": ["0"],
     "concat": ["['example']"],
@@ -39,9 +39,8 @@ array_methods = {
     "with": ["0", "'newValue'"],
     "toLocaleString": [],
     "toString": []
-}
-
-string_methods = {
+},
+"String" : {
     "constructor": [],
     "anchor": ["'name'"],
     "at": ["0"],
@@ -93,4 +92,5 @@ string_methods = {
     "toLowerCase": [],
     "toUpperCase": [],
     "valueOf": []
+},
 }
