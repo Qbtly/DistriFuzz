@@ -113,7 +113,7 @@ ids = []
 intervals = {}
 texts = {}
 new_samples = []
-
+numbers = [0,1,2,3,4,5]
 # train_file_path = "/home/b/zhunki/crossover/pymodules/train.txt"
 # last_original = ""
 # last_replace = ""

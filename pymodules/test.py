@@ -4,7 +4,7 @@ import json
 import config
 import re
 import config
-from call_function_with_timeout import SetTimeoutDecorator
+# from call_function_with_timeout import SetTimeoutDecorator
 from antlr4.CommonTokenStream import CommonTokenStream
 from antlr4.InputStream import InputStream
 from antlr4.TokenStreamRewriter import TokenStreamRewriter
@@ -15,7 +15,9 @@ from JavaScriptParserVisitor import JavaScriptParserVisitor as JSV
 from JavaScriptParserVisitor2 import JavaScriptParserVisitor2 as JSV2
 import subprocess
 import basic
+
 VariableNames = set()
+obj_name8type = {}
 
 
 class MyVisitor(JSV):
@@ -58,12 +60,14 @@ def init():
     config.new_samples = []
     config.intervals[1].append((0, 0))
 
+
 def init2():
     all_type = []
     for type in range(5, 86):
         if len(config.texts[type]) > 0:
             all_type.append(type)
     return all_type
+
 
 def Parse(js_code):
     input_stream = InputStream(js_code.decode())
@@ -127,8 +131,8 @@ console.log("[" + output.join(",\n") + "]");
     return var_dict
 
 
-def get_call_statements(array_methods, obj_type):
-    # array_methods ==> var_dict["methods"]
+def get_call_statements(methods, obj_type):
+    # methods ==> var_dict["methods"]
     call_statements = []
     typed_methods = basic.methods[obj_type]
     all = list(typed_methods.items())
@@ -137,38 +141,16 @@ def get_call_statements(array_methods, obj_type):
         args = ", ".join(a[1])
         call_statement = f"{a[0]}({args});"
         call_statements.append(call_statement)
-    for method in array_methods:
+    for method in methods:
         if method not in b:
-            # args_arr = basic.array_methods[method]
-            # args = ", ".join(args_arr[1])
-            # args = ""
-            # call_statement = f"{method}({args});"
             call_statements.append(f"{method}()")
             print(method)
-        #     # 这些方法通常需要一个回调函数作为参数
-        #     call_statements.append(f"{method}(element => element > 0)")
-        # elif method in ["push", "unshift"]:
-        #     # push 和 unshift 方法通常需要添加元素作为参数
-        #     call_statements.append(f"{method}(newElement)")
-        # elif method in ["indexOf", "lastIndexOf", "includes"]:
-        #     # 这些方法通常需要一个要搜索的元素作为参数
-        #     call_statements.append(f"{method}(searchElement)")
-        # elif method in ["slice", "splice"]:
-        #     # slice 和 splice 方法通常需要索引作为参数
-        #     call_statements.append(f"{method}(start, end)")
-        # elif method == "join":
-        #     # join 方法通常需要一个字符串作为参数
-        #     call_statements.append(f"{method}(', ')")
-        # elif method == "sort":
-        #     # sort 方法可以带有一个比较函数作为参数
-        #     call_statements.append(f"{method}((a, b) => a - b)")
-        # else:
-        #     # 对于其他方法，我们暂时不添加特定参数
-        #     call_statements.append(f"{method}()")
+
     # 输出生成的调用语句
     # for statement in call_statements:
     #     print(statement)
     return call_statements
+
 
 def get_property_call(var_dicts):
     # 新变量名
@@ -190,12 +172,38 @@ def get_property_call(var_dicts):
     return chosen_obj['obj'], call_statement
 
 
-def generator(rewriter, var_dict):
+def generator(rewriter, var_dicts):
     # 生成一条方法调用
-    var_name, new_statement = get_property_call(var_dict)
-    #位置
+    var_name, new_statement = get_property_call(var_dicts)
+
+    for n in range(3):
+        if "tmp_num" in new_statement:
+            # 将所有tmp_num替换成随机的或confid.numbers中的数字
+            new_num = random.choice(config.numbers)
+            # 替换
+            new_statement = new_statement.replace("tmp_num", new_num)
+            pass
+        elif "tmp_array" in new_statement:
+            # Array 从obj_name8type获取
+            try:
+                new_array = random.choice(obj_name8type['Array'])
+            except:
+                new_array = ['example']
+            # 替换
+            new_statement = new_statement.replace("tmp_array", new_array)
+        elif "tmp_str" in new_statement:
+            # String 从obj_name8type获取
+            try:
+                new_str = random.choice(obj_name8type['String'])
+            except:
+                new_str = 'example'
+            # 替换
+            new_statement = new_statement.replace("tmp_str", new_str)
+        #未完待续
+
+    # 确定插入位置
     prefix = ""
-    interval = (0, 0)
+    interval = (0, 0)  # 从头
     count = 0
     while (var_name not in prefix) and count < 100:
         interval = random.choice(config.intervals[1])
@@ -224,6 +232,7 @@ def change(rewriter, all_type):
     # new_sample = rewriter.getDefaultText()
     return new_sample
 
+
 def fuzz():
     if len(config.new_samples) > 0:
         sample = config.new_samples.pop(0)
@@ -236,18 +245,24 @@ def parse(js_code, add_buf):
     rewriter = pre_process(js_code.encode())
     var_dicts = get_property(js_code, list(VariableNames))
 
+    # 丰富var_dicts
     for var_dict in var_dicts:
-        obj_type = var_dict["objtype"]
-        var_dict["methods"] = get_call_statements(var_dict["methods"], obj_type)
+        obj_type = var_dict['objtype']
+        if obj_type not in list(obj_name8type.keys()):
+            obj_name8type[obj_type] = []
+        obj_name8type[obj_type].append(var_dict['obj'])
+
+        var_dict['methods'] = get_call_statements(var_dict['methods'], obj_type)
         # var_dict["attrs"]
     print(var_dicts)
+
     all_type = init2()
     for t in [65, 73, 76, 80, 65, 73, 76, 80, 65, 73, 76, 80, 81]:
         all_type.append(t)
     new_sample = ""
 
     count = 0
-    change_p = 0.9
+    change_p = 1.0
     while count < config.sample_size:
         count += 1  # 增加迭代计数
         rewriter.rollback(rewriter.lastRewriteTokenIndex(), "default")
@@ -266,36 +281,6 @@ def parse(js_code, add_buf):
             config.new_samples.append(new_sample)
             if len(config.new_samples) > config.sample_size:
                 return len(config.new_samples)
-
-        # print('===========================')
-        # new_sample = rewriter.getDefaultText()
-        # print(new_sample)
-        #
-        # print('88888888888888888888888888')
-        # now = rewriter.getText("", 0, 10000)
-        # print(now)
-
-    # while count < config.sample_size:
-    #     ran = random.random()
-    #     type = random.choice(all_type)
-    #     if len(config.intervals[type]) > 0 and len(config.texts[type]) > 0:
-    #         count += 1
-    #         if ran < change_p:
-    #             #替换
-    #             interval = random.choice(config.intervals[type])
-    #             text = random.choice(config.texts[type])
-    #             change(text, interval, rewriter)
-    #         elif change_p < ran < 1.0:
-    #             # 删除
-    #             interval = random.choice(config.intervals[type])
-    #             text = ''
-    #             change(text, interval, rewriter)
-    #         else:
-    #             # 插入
-    #             if len(config.intervals[1]) > 0:
-    #                 interval = random.choice(config.intervals[1])
-    #                 text = rewriter.getText("", interval[0], interval[1]) + random.choice(kkk.statement)
-    #                 change(text, interval, rewriter)
 
     return len(config.new_samples)
 
@@ -321,7 +306,6 @@ if __name__ == '__main__':
                 f.close()
             # print(fuzz().decode())
             # print("=============================")
-
 
 # [{
 #   "obj": "v2",
