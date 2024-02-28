@@ -59,10 +59,9 @@ function setReplacer(key, value) {
 }
 let output = [];
 /////////////////////////////////////////////////////////////////////////////////////
-let variableNames = ['v4', 'v2']
-    
-    const v2 = new Array(2);
-    const v4 = new String("A String object");
+let variableNames = ['v3', 'v1']
+    const v1 = ["Apple", "Banana"];
+    const v3 = "A string primitive";
     
 variableNames.forEach(varName => {
 try{

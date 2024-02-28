@@ -1,3 +1,11 @@
+all_bs = [
+   'Array', 'String', 'Number', 'Object', 'Function', 'Boolean', 'Symbol', 'BigInt', 'RegExp', 'Error', 'EvalError',
+   'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'AggregateError', 'URIError', 'ArrayBuffer',
+   'SharedArrayBuffer', 'Uint8Array', 'Int8Array', 'Uint16Array', 'Int16Array', 'Uint32Array', 'Int32Array',
+   'Float32Array', 'Float64Array', 'Uint8ClampedArray', 'BigInt64Array', 'BigUint64Array', 'DataView', 'Date',
+   'Promise', 'Proxy', 'Map', 'WeakMap', 'Set', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Math', 'JSON', 'Reflect'
+]
+
 # 定义 JavaScript Array 和 String 方法及示例参数
 methods = {
     "Array": {
@@ -52,17 +60,17 @@ methods = {
         "charCodeAt": ["tmp_num"],
         "codePointAt": ["tmp_num"],
         "concat": ["tmp_str"],
-        "endsWith": ["'test'"],
+        "endsWith": ["tmp_str"],
         "fontcolor": ["'color'"],
         "fontsize": ["'size'"],
         "fixed": [],
-        "includes": ["'test'"],
-        "indexOf": ["'test'"],
+        "includes": ["tmp_str"],
+        "indexOf": ["tmp_str"],
         "isWellFormed": [],
         "italics": [],
-        "lastIndexOf": ["'test'"],
+        "lastIndexOf": ["tmp_str"],
         "link": ["'url'"],
-        "localeCompare": ["'test'"],
+        "localeCompare": ["tmp_str"],
         "match": ["/test/"],
         "matchAll": ["/test/g"],
         "normalize": ["'NFC'"],
@@ -80,7 +88,7 @@ methods = {
         "substr": ["tmp_num", "tmp_num"],
         "substring": ["tmp_num", "tmp_num"],
         "sup": [],
-        "startsWith": ["'test'"],
+        "startsWith": ["tmp_str"],
         "toString": [],
         "toWellFormed": [],
         "trim": [],

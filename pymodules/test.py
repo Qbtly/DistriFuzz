@@ -15,6 +15,7 @@ from JavaScriptParserVisitor import JavaScriptParserVisitor as JSV
 from JavaScriptParserVisitor2 import JavaScriptParserVisitor2 as JSV2
 import subprocess
 import basic
+import generator
 
 VariableNames = set()
 obj_name8type = {}
@@ -69,7 +70,7 @@ def init2():
     return all_type
 
 
-def Parse(js_code):
+def Parse_ast(js_code):
     input_stream = InputStream(js_code.decode())
     lexer = JSL(input_stream)
     stream = CommonTokenStream(lexer)
@@ -80,7 +81,6 @@ def Parse(js_code):
     visitor = MyVisitor()
     try:
         visitor.visit(tree)
-
     except RecursionError:
         return
     rewriter = TokenStreamRewriter(tokens=stream)
@@ -89,7 +89,7 @@ def Parse(js_code):
 
 def pre_process(js_code):
     init()
-    rewriter = Parse(js_code)
+    rewriter = Parse_ast(js_code)
     return rewriter
 
 
@@ -154,7 +154,7 @@ def get_call_statements(methods, obj_type):
 
 def get_property_call(var_dicts):
     # 新变量名
-    new_var = "var"
+    new_var = "zdy"
     i = 1
     while new_var + str(i) in VariableNames:
         i += 1
@@ -163,8 +163,8 @@ def get_property_call(var_dicts):
     chosen_obj = random.choice(var_dicts)
     chosen_type = random.choice(["methods", "attrs"])
     if chosen_type == "methods":
-        call_statement = random.choice(chosen_obj["methods"])
-        call_statement = f"\nlet {new_var} = {chosen_obj['obj']}.{call_statement};\n"
+        chosen_method = random.choice(chosen_obj["methods"])
+        call_statement = f"\nlet {new_var} = {chosen_obj['obj']}.{chosen_method};\n"
     else:
         chosen_attr = random.choice(list(chosen_obj[chosen_type].keys()))
         call_statement = f"\nlet {new_var} = {chosen_obj['obj']}.{chosen_attr};\n"
@@ -172,34 +172,48 @@ def get_property_call(var_dicts):
     return chosen_obj['obj'], call_statement
 
 
-def generator(rewriter, var_dicts):
+def generate(rewriter, var_dicts):
     # 生成一条方法调用
     var_name, new_statement = get_property_call(var_dicts)
 
+    change_p = 1.0
     for n in range(3):
+        ran = random.random()
         if "tmp_num" in new_statement:
-            # 将所有tmp_num替换成随机的或confid.numbers中的数字
-            new_num = random.choice(config.numbers)
+            # Number
+            try:
+                if ran < 0.8:
+                    new_num = random.choice(obj_name8type['Number'])
+                else:
+                    new_num = generator.get_number()
+            except:
+                new_num = generator.get_number()
             # 替换
-            new_statement = new_statement.replace("tmp_num", new_num)
+            new_statement = new_statement.replace("tmp_num", str(new_num))
             pass
         elif "tmp_array" in new_statement:
-            # Array 从obj_name8type获取
+            # Array
             try:
-                new_array = random.choice(obj_name8type['Array'])
+                if ran < 0.8:
+                    new_array = random.choice(obj_name8type['Array'])
+                else:
+                    new_array = generator.get_array()
             except:
-                new_array = ['example']
+                new_array = generator.get_array()
             # 替换
-            new_statement = new_statement.replace("tmp_array", new_array)
+            new_statement = new_statement.replace("tmp_array", str(new_array))
         elif "tmp_str" in new_statement:
-            # String 从obj_name8type获取
+            # String
             try:
-                new_str = random.choice(obj_name8type['String'])
+                if ran < 0.8:
+                    new_str = random.choice(obj_name8type['String'])
+                else:
+                    new_str = generator.get_string()
             except:
-                new_str = 'example'
+                new_str = generator.get_string()
             # 替换
             new_statement = new_statement.replace("tmp_str", new_str)
-        #未完待续
+        # 未完待续
 
     # 确定插入位置
     prefix = ""
@@ -207,7 +221,7 @@ def generator(rewriter, var_dicts):
     count = 0
     while (var_name not in prefix) and count < 100:
         interval = random.choice(config.intervals[1])
-        prefix = new_sample = rewriter.getText("", 0, interval[1])
+        prefix = rewriter.getText("", 0, interval[1])
         count += 1  # 增加迭代计数
         # 检查是否达到最大迭代次数
         if count >= 100:
@@ -225,11 +239,13 @@ def insert(rewriter, all_type):
 
 def change(rewriter, all_type):
     type = random.choice(all_type)
-    interval = config.intervals[type]
-    text = config.texts[type]
-    rewriter.replace("default", interval[0], interval[1], text.strip())
+    if len(config.intervals[type]) > 0 and len(config.texts[type]) > 0:
+        interval = random.choice(config.intervals[type])
+        text = random.choice(config.texts[type])
+        rewriter.replace("default", interval[0], interval[1], text.strip())
     new_sample = rewriter.getText("default", 0, 10000)
     # new_sample = rewriter.getDefaultText()
+    print(new_sample)
     return new_sample
 
 
@@ -262,20 +278,20 @@ def parse(js_code, add_buf):
     new_sample = ""
 
     count = 0
-    change_p = 1.0
+    change_p = 0.8
     while count < config.sample_size:
         count += 1  # 增加迭代计数
         rewriter.rollback(rewriter.lastRewriteTokenIndex(), "default")
         ran = random.random()
         if ran < change_p:
             # 生成
-            new_sample = generator(rewriter, var_dicts)
+            new_sample = generate(rewriter, var_dicts)
         elif change_p < ran < 1.0:
-            # 插入
-            new_sample = insert(rewriter, all_type)
-        else:
             # 更改
             new_sample = change(rewriter, all_type)
+        else:
+            # 插入
+            new_sample = insert(rewriter, all_type)
 
         if new_sample not in config.new_samples:
             config.new_samples.append(new_sample)
@@ -292,11 +308,10 @@ if __name__ == '__main__':
     const v3 = "A string primitive";
     '''
     js_code2 = '''
-    
     const v2 = new Array(2);
     const v4 = new String("A String object");
     '''
-    length = parse(js_code2, js_code2)
+    length = parse(js_code, js_code)
     # length = parse(js1.encode(), js2.encode())
     print(length)
     if length > 0:
@@ -305,7 +320,7 @@ if __name__ == '__main__':
                 f.write(fuzz().decode())
                 f.close()
             # print(fuzz().decode())
-            # print("=============================")
+    print("/home/qbtly/Desktop/aaaaa/b")
 
 # [{
 #   "obj": "v2",
