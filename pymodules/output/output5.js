@@ -98,3 +98,39 @@ function setReplacer(key, value) {
 //mark
 let isExecuted = false;
 /////////////////////////////////////////////////////////////////////////////////////
+
+
+
+const ab = new ArrayBuffer(0x1000, { "maxByteLength": 0x4000 });
+const u8 = new Uint8Array(ab);
+
+let callback = {
+    valueOf() {
+        ab.resize(0);
+        return 0;
+    }
+};
+
+u8.copyWithin(0x20, callback);
+////////////////////probe/////////////////////////
+
+         let variableNames = ['ab', 'u8', 'callback'];
+        if (!isExecuted) {
+            let output = [];
+            variableNames.forEach(varName => {
+            try{
+                let varInstance = eval(varName);
+                let typeInfo = varIntrospect(varName, varInstance);
+                if (typeInfo !== undefined)
+                    output.push(JSON.stringify(typeInfo, setReplacer, 2));
+            }catch(err){
+                null;
+                }
+            });
+            console.log("qbtly_start[" + output.join(",\n") + "]qbtly_end");
+            isExecuted = true; // 设置标志为 true，防止代码再次执行
+        }
+            
+////////////////////probe/////////////////////////
+
+

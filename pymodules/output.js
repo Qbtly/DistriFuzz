@@ -1,4 +1,3 @@
-
 var varIntrospect = (objname, obj) => {
     var attrs = {};
     var methods = new Set();
@@ -7,7 +6,12 @@ var varIntrospect = (objname, obj) => {
         return;
     }
     var enumerableProperties = Array.isArray(obj) ? Object.keys(obj) : null;
+//    var enumerableProperties = Array.isArray(obj) ? Object.getOwnPropertyDescriptor(obj) : null;
+//    console.log(enumerableProperties)
+    // 获取对象原型链上的属性和方法
+//    console.log(1)
     Object.getOwnPropertyNames(Object.getPrototypeOf(obj)).forEach((name) => {
+//    console.log(name)
         try{
             if (typeof obj[name] === 'function') {
                 methods.add(name);
@@ -21,10 +25,11 @@ var varIntrospect = (objname, obj) => {
             null;
         }
     });
-
+    // 获取对象自身的属性和方法
+//    console.log(2)
     Object.getOwnPropertyNames(obj).forEach((name) => {
+//    console.log(name)
         try{
-
             if (enumerableProperties !== null && enumerableProperties.indexOf(name) !== -1) {
                 return;
             }
@@ -40,6 +45,37 @@ var varIntrospect = (objname, obj) => {
             null;
         }
     });
+////    console.log(3)
+//    // 获取对象的构造函数的属性和方法
+//    Object.getOwnPropertyNames(obj.constructor).forEach((name) => {
+////        console.log(name)
+////        console.log(obj.constructor.hasOwnProperty(name))
+//        try{
+//            if (typeof obj.constructor[name] === 'function') {
+//                methods.add(name);
+//            }
+//            else if (obj.constructor.hasOwnProperty(name)) {
+//                attrs[name] = typeof obj.constructor[name] === 'object' && obj.constructor[name] !== null
+//                             ? obj.constructor[name].constructor.name
+//                             : typeof obj.constructor[name];
+//            }
+//        }catch(err){
+//            null;
+//        }
+//    });
+
+    // 使用Object.getOwnPropertyDescriptors获取所有自有属性描述符
+    var allProps = Object.getOwnPropertyDescriptors(obj.constructor.prototype);
+//    console.log(JSON.stringify(allProps))
+    for (const [name, descriptor] of Object.entries(allProps)) {
+        if (typeof descriptor.value === 'function') {
+            methods.add(name);
+        } else {
+            attrs[name] = typeof descriptor.value === 'object' && descriptor.value !== null
+                            ? descriptor.value.constructor.name
+                            : typeof descriptor.value;
+        }
+    }
     var objtype = obj.constructor.name;
     if(objtype === 'String'){
         for(var index in attrs){
@@ -59,18 +95,24 @@ function setReplacer(key, value) {
 }
 let output = [];
 /////////////////////////////////////////////////////////////////////////////////////
-let variableNames = ['v3', 'v1']
-    const v1 = ["Apple", "Banana"];
-    const v3 = "A string primitive";
-    
-variableNames.forEach(varName => {
-try{
-    let varInstance = eval(varName);
-    let typeInfo = varIntrospect(varName, varInstance);
-    output.push(JSON.stringify(typeInfo, setReplacer, 2));
-}catch(err){
-    console.log('error');
-    }
-});
-console.log("[" + output.join(",\n") + "]");
-    
+var a = [];
+let variableNames = ['a'];
+        variableNames.forEach(varName => {
+        try{
+            let varInstance = eval(varName);
+            let typeInfo = varIntrospect(varName, varInstance);
+            output.push(JSON.stringify(typeInfo, setReplacer, 2));
+        }catch(err){
+            null;
+            }
+        });
+        console.log("[" + output.join(",\n") + "]");
+            
+for (var e = 0; e < 100; e++) {a.push(e + 0.123);}
+function call_back() {
+    var k = 0;
+    k = 1;
+    a.length = 0; 
+    return 10;
+}
+var b = a.slice(0, { valueOf: call_back });

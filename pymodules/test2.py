@@ -61,12 +61,40 @@ class MyVisitor(JSV):
         self.scopes.pop()
         self.currentScope = self.scopes[-1] if self.scopes else self.globalScope
 
+    def visitExpressionStatement(self, ctx):
+        # 使用expressionSequence代替之前假定的expression方法
+        expressionSequence = ctx.expressionSequence()
+        # 这里的逻辑需要根据具体的语法规则来进一步细化
+        # 以下为示例性逻辑，具体实现取决于expressionSequence结构和内容
+        # for expression in expressionSequence.getChildren():
+        #     print(type(expression).__name__)
+        #     print('AssignmentOperatorExpressionContext' == str(type(expression).__name__))
+        #     if 'AssignmentOperatorExpressionContext' in str(type(expression).__name__):
+        #         print(f"找到表达式: {expression.getText()}")
+        super().visitExpressionStatement(ctx)
+
+    def visitAssignmentOperatorExpression(self, ctx):
+        left = ctx.singleExpression(0).getText()
+        right = ctx.singleExpression(1).getText()
+        print(left, right)
+        super().visitExpressionStatement(ctx)
+        pass
+
     def visitFunctionDeclaration(self, ctx):
         function_name = ctx.identifier().getText()
         interval = ctx.getSourceInterval()
         self.currentScope.variables[function_name] = interval[1]
 
         self.enterScope(function_name)
+        super().visitFunctionDeclaration(ctx)
+        self.exitScope()
+
+    def visitClassDeclaration(self, ctx):
+        class_name = ctx.identifier().getText()
+        interval = ctx.getSourceInterval()
+        self.currentScope.variables[class_name] = interval[1]
+
+        self.enterScope(class_name)
         super().visitFunctionDeclaration(ctx)
         self.exitScope()
 
@@ -109,89 +137,17 @@ class MyVisitor(JSV):
         return available_variables
 
 
-# class MyVisitor(JSV):
-#     def __init__(self):
-#         super().__init__()
-#         self.isGlobalScope = True
-#         self.currentScope = "global"  # 增加当前作用域跟踪
-#
-#     def visitFunctionDeclaration(self, ctx):
-#         functionName = ctx.identifier().getText()  # 获取函数名称
-#         line_number = ctx.stop.line  # 获取变量声明的行号
-#         # 如果成功获取到函数名
-#         if functionName:
-#             # 假设这里的VariableNames是一个字典结构，用来记录变量名或函数名及其信息
-#             if self.isGlobalScope:
-#                 # 记录函数名作为全局作用域下的一个变量/函数
-#                 if "global" not in IntervalEnd_VariableNames:
-#                     IntervalEnd_VariableNames["global"] = {}
-#                 IntervalEnd_VariableNames["global"][functionName] = line_number  # 也可以添加更多相关信息，比如行号
-#         self.isGlobalScope = False
-#         previousScope = self.currentScope
-#         self.currentScope = functionName  # 更新当前作用域为函数名
-#         self.visitChildren(ctx)
-#         self.currentScope = previousScope  # 恢复之前的作用域
-#         self.isGlobalScope = True
-#
-#     def visitVariableDeclaration(self, ctx):
-#         var_name = ctx.assignable().getText()
-#         line_number = ctx.start.line  # 获取变量声明的行号
-#         if self.isGlobalScope:
-#             # 保存变量名和它们的行号，如果在全局作用域
-#             if "global" not in IntervalEnd_VariableNames:
-#                 IntervalEnd_VariableNames["global"] = {}
-#             IntervalEnd_VariableNames["global"][var_name] = line_number
-#         else:
-#             # 保存变量名和它们的行号，根据当前函数作用域
-#             if self.currentScope not in IntervalEnd_VariableNames:
-#                 IntervalEnd_VariableNames[self.currentScope] = {}
-#             IntervalEnd_VariableNames[self.currentScope][var_name] = line_number
-#         self.visitChildren(ctx)
-#
-#     def visitStatement(self, ctx):
-#         if ctx.expressionStatement():
-#
-#             interval = ctx.getSourceInterval()
-#             print(ctx.getText())
-#             # 检查是否处于全局作用域
-#             if self.isGlobalScope:
-#                 if "global" not in IntervalEnd_VariableNames:
-#                     IntervalEnd_VariableNames["global"] = {}
-#                 IntervalEnd_VariableNames["global"][ctx.getText()] = interval
-#             else:
-#                 if self.currentScope not in IntervalEnd_VariableNames:
-#                     IntervalEnd_VariableNames[self.currentScope] = {}
-#                 IntervalEnd_VariableNames[self.currentScope][ctx.getText()] = interval
-#         # 检查语句类型是否为变量声明
-#         if ctx.functionDeclaration():
-#             functionName = ctx.functionDeclaration().identifier().getText()  # 获取函数名称
-#             line_number = ctx.stop.line  # 获取变量声明的行号
-#
-#             # 检查是否处于全局作用域
-#             if self.isGlobalScope:
-#                 if "global" not in IntervalEnd_VariableNames:
-#                     IntervalEnd_VariableNames["global"] = {}
-#                 IntervalEnd_VariableNames["global"][functionName] = line_number
-#             else:
-#                 if self.currentScope not in IntervalEnd_VariableNames:
-#                     IntervalEnd_VariableNames[self.currentScope] = {}
-#                 IntervalEnd_VariableNames[self.currentScope][functionName] = line_number
-#         # 其他类型的语句可以根据需要添加额外的处理逻辑
-#
-#         # 继续遍历子节点
-#         self.visitChildren(ctx)
-
-
 def all_type_text():
     # print(IntervalEnd_VariableNames)
     for type in range(0, 86):
-        print(type, end=': ')
-        for text in config.texts[type]:
-            print(text, end="  |  ")
-        print('\n')
-        for interval in config.intervals[type]:
-            print(interval, end="  |  ")
-        print('\n')
+        if type == type:
+            print(type, end=': ')
+            for text in config.texts[type]:
+                print(text, end="  |  ")
+            print('\n')
+            for interval in config.intervals[type]:
+                print(interval, end="  |  ")
+            print('\n')
 
 
 def init():
@@ -239,6 +195,7 @@ def pre_process(js_code):
         for item in items:
             if item not in VariableNames:
                 VariableNames.append(item)
+
     return rewriter
 
 
@@ -277,13 +234,15 @@ def get_property(rewriter):
 
         cmd = [engine, "--allow-natives-syntax", "--expose-gc", f"output/output{index}.js"]
         result = subprocess.run(cmd, capture_output=True, text=True)
+        print(result.stdout)
         extract_result = tools.extract_json(result.stdout)
         var_dicts = []
 
         try:
             var_dicts = json.loads(extract_result)
             # print("提取成功！")
-        except :
+            # print("extract_result:", extract_result)
+        except:
             print("出错了！", index, result.stdout)
             print("extract_result:", extract_result)
             IntervalEnd_VariableNames.pop(interval_end)
@@ -299,7 +258,7 @@ def get_property(rewriter):
 
         IntervalEnd_Vardicts[interval_end] = var_dicts
 
-    # print("IntervalEnd_Vardicts: ", IntervalEnd_Vardicts)
+    print("IntervalEnd_Vardicts: ", IntervalEnd_Vardicts)
 
     return IntervalEnd_Vardicts
 
@@ -451,10 +410,15 @@ def fuzz():
 
 def after_timeout():  # 超时后的处理函数
     print("Timeout!")
+
+
 @set_timeout(20, after_timeout())  # 限时 2 秒
 def parse(js_code, add_buf):
     rewriter = pre_process(js_code.encode())
+    # all_type_text()
+
     intervalend_vardicts = get_property(rewriter)
+    return 0
     all_type = init2()
     for t in [65, 73, 76, 80, 65, 73, 76, 80, 65, 73, 76, 80, 81]:
         all_type.append(t)
@@ -488,7 +452,7 @@ if __name__ == '__main__':
     # 示例 JavaScript 代码
     js_code = js.js_code
     js_code2 = js.js_code2
-    # length = parse(js_code, js_code)
+    length = parse(js_code2, js_code2)
     # print("Total Samples: ", length)
     # if length > 0:
     #     for i in range(0, length):
@@ -498,11 +462,12 @@ if __name__ == '__main__':
     #         # print(fuzz().decode())
     # print("/home/qbtly/Desktop/aaaaa/b")
 
-    poc_dir = "/home/qbtly/Desktop/PatchFuzz/js/js_poc/v8"
+    exit()
+    poc_dir = "/home/qbtly/Desktop/PatchFuzz/js/js_poc/v8/"
     directory_path = Path(poc_dir)
     i = 0
     for file in directory_path.rglob('*'):
-        if i < 14:
+        if i < 0:
             i = i + 1
             continue
         IntervalEnd_Vardicts = {}
@@ -518,30 +483,10 @@ if __name__ == '__main__':
                     js_content = f.read()
                     # print(js_content)
                     length = parse(js_content, js_content)
-                    print("Total Samples: ", length, file)
-                    filename = file.name.split('.')[0]
-                    dirpath = "/home/qbtly/Desktop/aaaaa/" + filename + "/"
-                    if os.path.isdir(dirpath):
-                        shutil.rmtree(dirpath)
-                    os.mkdir(dirpath)
-                    if length > 0:
-                        for k in range(0, length):
-                            with open(dirpath + filename + "_" + str(k) + ".js", "w") as f:
-                                f.write(fuzz().decode())
-                                f.close()
-                            # print(fuzz().decode())
-                    # print(dirpath)
+                    # print("Total Samples: ", length, file)
             except Exception as e:
-                print(i, file, e)
-                # 这个是输出错误的具体原因
-                # print(e)  # 输出：division by zero
-                # print(sys.exc_info())  # 输出：(<class 'ZeroDivisionError'>, ZeroDivisionError('division by zero'), <traceback object at 0x000001A1A7B03380>)
-                # # 以下两步都是输出错误的具体位置，报错行号位置在第几行
-                # print('\n', '>>>' * 20)
-                # print(traceback.print_exc())
-                # print('\n', '>>>' * 20)
-                # print(traceback.format_exc())
-
-
-            tools.del_file("/home/qbtly/Desktop/myh_fuzzer/pymodules/output/")
-            i = i + 1
+                print(file, e)
+        i = i + 1
+        # exit()
+        # input("?")
+        # tools.del_file("/home/qbtly/Desktop/myh_fuzzer/pymodules/output/")

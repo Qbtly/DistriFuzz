@@ -64,3 +64,4 @@ def get_array():
     # 从样本数组中随机选择元素来生成随机数组
     random_array = random.choices(sample_elements)
     return random_array
+

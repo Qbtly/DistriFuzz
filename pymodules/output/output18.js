@@ -16,7 +16,7 @@ var varIntrospect = (objname, obj) => {
             if (typeof obj[name] === 'function') {
                 methods.add(name);
             }
-            else if (Object.getPrototypeOf(obj).hasOwnProperty(name)) {
+            else if (obj.hasOwnProperty(name)) {
                 attrs[name] = typeof obj[name] === 'object' && obj[name] !== null
                              ? obj[name].constructor.name
                              : typeof obj[name];
@@ -65,24 +65,22 @@ var varIntrospect = (objname, obj) => {
 //    });
 
     // 使用Object.getOwnPropertyDescriptors获取所有自有属性描述符
-//    var allProps = Object.getOwnPropertyDescriptors(obj.constructor.prototype);
+    var allProps = Object.getOwnPropertyDescriptors(obj.constructor.prototype);
 //    console.log(JSON.stringify(allProps))
-//    for (const [name, descriptor] of Object.entries(allProps)) {
-//        if (typeof descriptor.value === 'function') {
-//            methods.add(name);
-//        } else {
-//            attrs[name] = typeof descriptor.value === 'object' && descriptor.value !== null
-//                            ? descriptor.value.constructor.name
-//                            : typeof descriptor.value;
-//        }
-//    }
-
+    for (const [name, descriptor] of Object.entries(allProps)) {
+        if (typeof descriptor.value === 'function') {
+            methods.add(name);
+        } else {
+            attrs[name] = typeof descriptor.value === 'object' && descriptor.value !== null
+                            ? descriptor.value.constructor.name
+                            : typeof descriptor.value;
+        }
+    }
     var objtype = obj.constructor.name;
-    if(objtype === 'String' || objtype.includes('Array')){
+    if(objtype === 'String'){
         for(var index in attrs){
             var attr = attrs[index];
-            if((!isNaN(parseInt(index)) && attr === 'String') || (!isNaN(parseInt(index)) && attr === 'string')||
-            (!isNaN(parseInt(index)) && attr === 'Number') || (!isNaN(parseInt(index)) && attr === 'number')){
+            if((!isNaN(parseInt(index)) && attr === 'String') || (!isNaN(parseInt(index)) && attr === 'string')){
                 delete attrs[index];
             }
         }
@@ -98,3 +96,58 @@ function setReplacer(key, value) {
 //mark
 let isExecuted = false;
 /////////////////////////////////////////////////////////////////////////////////////
+
+
+function opt(opt_param){
+const v2 = new Float64Array(752);
+const v5 = [];
+const v6 = v2.values;
+const v7 = Reflect.apply(v6,v2,v5);
+switch (v7) {
+    case Float64Array:
+        let v8 = 1;
+        do {
+            function* v10(v11,v12) {
+                for (const v13 of v5) {
+                    const v14 = v13 >>> v8;
+                }
+                const v15 = yield v10;
+                return 752;
+            }
+            const v16 = v8++;
+        } while (v8 < 2);
+        break;
+}
+return v5;
+}
+let jit_a0 = opt(false);
+opt(true);
+////////////////////probe/////////////////////////
+
+         let variableNames = ['opt', 'jit_a0'];
+        if (!isExecuted) {
+            let output = [];
+            variableNames.forEach(varName => {
+            try{
+                let varInstance = eval(varName);
+                let typeInfo = varIntrospect(varName, varInstance);
+                if (typeInfo !== undefined)
+                    output.push(JSON.stringify(typeInfo, setReplacer, 2));
+            }catch(err){
+                null;
+                }
+            });
+            console.log("qbtly_start[" + output.join(",\n") + "]qbtly_end");
+            isExecuted = true; // 设置标志为 true，防止代码再次执行
+        }
+            
+////////////////////probe/////////////////////////
+
+let jit_a0_0 = opt(false);
+%PrepareFunctionForOptimization(opt);
+let jit_a1 = opt(true);
+%OptimizeFunctionOnNextCall(opt);
+let jit_a2 = opt(false);
+print(jit_a0);
+print(jit_a2);
+//--allow-natives-syntax --fuzzing
