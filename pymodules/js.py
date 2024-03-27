@@ -48,7 +48,19 @@ let callback = {
 u8.copyWithin(0x20, callback);
 
 '''
-
+js_code4 = '''
+class CustomPromise extends Promise{
+ static resolve(){
+  return{
+   then(resolve, reject){
+    Promise.resolve().then(BigInt).then(resolve, reject);
+    reject();
+   }
+  };
+ }
+}
+CustomPromise.any([1]);
+'''
 get_type = r'''
         if (!isExecuted) {
             let output = [];

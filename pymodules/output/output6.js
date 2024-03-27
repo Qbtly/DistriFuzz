@@ -116,7 +116,7 @@ let b={
 var c=a.slice(0,b);
 ////////////////////probe/////////////////////////
 
-         let variableNames = ['i', 'c', 'a', 'b'];
+         let variableNames = ['b', 'i', 'c', 'a', 'a.length'];
                 if (!isExecuted) {
                     let output = [];
                     variableNames.forEach(varName => {

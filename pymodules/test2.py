@@ -17,8 +17,8 @@ import generator
 import js, tools
 from tools import set_timeout
 
-IntervalEnd_Vardicts = {}
 engine = "/home/qbtly/Desktop/target/V8/v8/0124/d8"
+IntervalEnd_Vardicts = {}
 VariableNames = set()
 obj_name8type = {}
 IntervalEnd_VariableNames = {}  # 用于存储变量名和它们所在的行号
@@ -30,7 +30,6 @@ class Scope:
         self.name = name
         self.parent = parent
         self.variables = {}
-        self.closure_variables = set()  # 用于存储闭包变量
 
 
 class MyVisitor(JSV):
@@ -46,11 +45,7 @@ class MyVisitor(JSV):
             name = f"block_{self.scopeCounter}"
             self.scopeCounter += 1
         # 进入新的作用域
-        parent_closure_variables = set()
-        if self.currentScope.parent:
-            parent_closure_variables.update(self.currentScope.parent.closure_variables)
         self.currentScope = Scope(name=name, parent=self.currentScope)
-        self.currentScope.parent.closure_variables.update(parent_closure_variables)
         self.scopes.append(self.currentScope)
 
     def exitScope(self):
@@ -58,11 +53,30 @@ class MyVisitor(JSV):
         self.scopes.pop()
         self.currentScope = self.scopes[-1] if self.scopes else self.globalScope
 
+    # def visitExpressionStatement(self, ctx):
+    #     # 使用expressionSequence代替之前假定的expression方法
+    #     expressionSequence = ctx.expressionSequence()
+    #     for expression in expressionSequence.getChildren():
+    #         # print(type(expression).__name__)
+    #         if 'AssignmentOperatorExpressionContext' in str(type(expression).__name__):
+    #             name = expression.getText()
+    #             VariableNames.add(name)
+    #     #         print(f"找到表达式: {expression.getText()}")
+    #     super().visitExpressionStatement(ctx)
+    #
+    def visitAssignmentExpression(self, ctx):
+        left = ctx.singleExpression(0).getText()
+        right = ctx.singleExpression(1).getText()
+        VariableNames.add(left)
+        # print(left, right)
+        super().visitExpressionStatement(ctx)
+
     def visitFunctionDeclaration(self, ctx):
         function_name = ctx.identifier().getText()
-        # VariableNames.add(function_name)
+        VariableNames.add(function_name)
         interval = ctx.getSourceInterval()
-        # self.currentScope.variables[function_name] = interval[1]
+        if function_name not in list(self.currentScope.variables.keys()):
+            self.currentScope.variables[function_name] = interval[1]
 
         self.enterScope(function_name)
         super().visitFunctionDeclaration(ctx)
@@ -70,8 +84,10 @@ class MyVisitor(JSV):
 
     def visitClassDeclaration(self, ctx):
         class_name = ctx.identifier().getText()
+        VariableNames.add(class_name)
         interval = ctx.getSourceInterval()
-        # self.currentScope.variables[class_name] = interval[1]
+        if class_name not in list(self.currentScope.variables.keys()):
+            self.currentScope.variables[class_name] = interval[1]
 
         self.enterScope(class_name)
         super().visitFunctionDeclaration(ctx)
@@ -82,43 +98,24 @@ class MyVisitor(JSV):
         super().visitBlock(ctx)
         self.exitScope()
 
+    def visitVariableDeclaration(self, ctx):
+        var_name = ctx.assignable().getText()
+        VariableNames.add(var_name)
+        interval = ctx.getSourceInterval()
+        if var_name not in list(self.currentScope.variables.keys()):
+            self.currentScope.variables[var_name] = interval[1]
+        # print(var_name, interval)
+        # print(self.currentScope.variables, self.currentScope.name)
+        super().visitVariableDeclaration(ctx)
+
     def visitIdentifier(self, ctx):
         var_name = ctx.getText()
         interval = ctx.getSourceInterval()
-        # print(var_name,interval)
-        if var_name not in config.builtins:
-            VariableNames.add(var_name)
-            if var_name not in list(self.currentScope.variables.keys()):
-                self.currentScope.variables[var_name] = interval[1]
-            # elif var_name in self.currentScope.parent.closure_variables:
-            #     self.currentScope.closure_variables.add(var_name)
-
-        self.enterScope(var_name)
-        super().visitFunctionDeclaration(ctx)
-        self.exitScope()
-
-    def visitVarDeclaration(self, ctx):
-        # for var in ctx.variableDeclaration(0):
-        var_name = ctx.variableDeclaration(0).assignable().getText()
-        interval = ctx.getSourceInterval()
-        if var_name not in config.builtins:
-            if var_name not in self.currentScope.variables:
-                self.currentScope.variables[var_name] = interval[1]
-            # elif var_name in self.currentScope.parent.closure_variables:
-            #     self.currentScope.closure_variables.add(var_name)
-
-    def visitLetConstDeclaration(self, ctx):
-        # 处理 let、const 声明的变量，这里根据具体情况进行实现
-        pass
-
-    def visitVariableDeclarationList(self, ctx):
-        declaration_type = ctx.varModifier().getText()  # 获取变量声明类型，如 var、let、const
-        print(declaration_type)
-        if declaration_type == 'var':
-            self.visitVarDeclaration(ctx)
-        else:
-            self.visitLetConstDeclaration(ctx)
-        super().visitVariableDeclaration(ctx)
+        VariableNames.add(var_name)
+        # if var_name not in config.builtins:
+        #     VariableNames.add(var_name)
+        #     if var_name not in list(self.currentScope.variables.keys()):
+        #         self.currentScope.variables[var_name] = interval[1]
 
     def visitStatement(self, ctx):
         interval = ctx.getSourceInterval()
@@ -126,6 +123,9 @@ class MyVisitor(JSV):
         if interval[1] not in avaliableInterval:
             avaliableInterval.append(interval[1])
             IntervalEnd_VariableNames[interval[1]] = self.getVariablesAtIntervalEnd(interval)
+        self.enterScope()
+        super().visitBlock(ctx)
+        self.exitScope()
 
     def getVariablesAtIntervalEnd(self, interval):
         # 假设 interval 是一个 (start, end) 元组
@@ -134,11 +134,9 @@ class MyVisitor(JSV):
         scope = self.currentScope
         # 遍历所有作用域，从当前作用域开始，向上直到全局作用域
         while scope is not None:
-            print(scope.name, '11111', scope.variables)
             for var_name, var_interval in scope.variables.items():
-                print(var_name)
-                var_declaration_point = var_interval
-                if var_declaration_point <= interval_end:
+                var_declaration_line = var_interval
+                if var_declaration_line <= interval_end:
                     available_variables.add(var_name)
             scope = scope.parent  # 移动到父作用域
 
@@ -187,7 +185,7 @@ def Parse_ast(js_code):
     parser.removeErrorListeners()
     parser.addErrorListener(ConsoleErrorListener())
     tree = parser.program()
-    visitor = JSV()
+    visitor = MyVisitor()
     try:
         visitor.visit(tree)
     except RecursionError:
@@ -257,7 +255,7 @@ def get_property(rewriter, engine_path):
             js_file.write(news[interval_end])
             # 执行 JavaScript 文件
 
-        cmd = [engine, "--allow-natives-syntax", "--expose-gc", f"output/output{index}.js"]
+        # cmd = [engine, "--allow-natives-syntax", "--expose-gc", f"output/output{index}.js"]
         cmd = [engine_path, f"output/output{index}.js"]
         result = subprocess.run(cmd, capture_output=True, text=True)
         print(result.stdout)
@@ -523,7 +521,7 @@ def parse(js_code, add_buf):
 
 if __name__ == '__main__':
     # 示例 JavaScript 代码
-    js_code = js.js_code
+    js_code = js.js_code4
     js_code2 = js.js_code2
     length = parse(js_code.encode(), js_code2.encode())
     print("Total Samples: ", length)

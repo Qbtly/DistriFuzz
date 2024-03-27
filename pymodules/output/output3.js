@@ -3,7 +3,6 @@ var varIntrospect = (objname, obj) => {
     var methods = new Set();
 
     if(obj === undefined || obj === null){
-    print(obj,"undefined")
         return;
     }
     var enumerableProperties = Array.isArray(obj) ? Object.keys(obj) : null;
@@ -104,27 +103,30 @@ let a_v = [];
 
 
 
-var a=[];
-for(var i=0;i<100;i++){
-    a.push(i+0.123);
+class CustomPromise extends Promise{
+ static resolve(){
+  return{
+   then(resolve, reject){
+    Promise.resolve().then(BigInt).then(resolve, reject);
+    reject();
+   }
+  };
+ }
 }
-let b={
-    valueOf(){
-//        a.length=0;
 ////////////////////probe/////////////////////////
 
-         let variableNames = ['i', 'c', 'a.length', 'b'];
+         let variableNames = ['BigInt', 'CustomPromise', 'static'];
                 if (!isExecuted) {
                     let output = [];
                     variableNames.forEach(varName => {
                     try{
                         let varInstance = eval(varName);
                         let typeInfo = varIntrospect(varName, varInstance);
-//                        if (typeInfo !== undefined)
+                        if (typeInfo !== undefined)
                             output.push(JSON.stringify(typeInfo, setReplacer, 2));
                             a_v.push(varName);
                     }catch(err){
-                        print(varName);
+                        null;
                         }
                     });
                     print("qbtly_aviliable[" + a_v + "]qbtly_var");
@@ -134,7 +136,4 @@ let b={
                     
 ////////////////////probe/////////////////////////
 
-        return 10;
-    }
-};
-var c=a.slice(0,b);
+CustomPromise.any([1]);

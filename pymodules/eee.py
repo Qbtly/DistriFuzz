@@ -2,6 +2,8 @@ import datetime
 import os
 import random
 import json
+import time
+
 import config
 from antlr4.CommonTokenStream import CommonTokenStream
 from antlr4.InputStream import InputStream
@@ -64,11 +66,12 @@ class MyVisitor(JSV):
     #     #         print(f"找到表达式: {expression.getText()}")
     #     super().visitExpressionStatement(ctx)
     #
-    # def visitAssignmentOperatorExpression(self, ctx):
-    #     left = ctx.singleExpression(0).getText()
-    #     right = ctx.singleExpression(1).getText()
-    #     # print(left, right)
-    #     super().visitExpressionStatement(ctx)
+    def visitAssignmentExpression(self, ctx):
+        left = ctx.singleExpression(0).getText()
+        right = ctx.singleExpression(1).getText()
+        VariableNames.add(left)
+        # print(left, right)
+        super().visitExpressionStatement(ctx)
 
     def visitFunctionDeclaration(self, ctx):
         function_name = ctx.identifier().getText()
@@ -110,11 +113,11 @@ class MyVisitor(JSV):
     def visitIdentifier(self, ctx):
         var_name = ctx.getText()
         interval = ctx.getSourceInterval()
-        # print(var_name,interval)
+        # VariableNames.add(var_name)
         if var_name not in config.builtins:
             VariableNames.add(var_name)
-            if var_name not in list(self.currentScope.variables.keys()):
-                self.currentScope.variables[var_name] = interval[1]
+        #     if var_name not in list(self.currentScope.variables.keys()):
+        #         self.currentScope.variables[var_name] = interval[1]
 
     def visitStatement(self, ctx):
         interval = ctx.getSourceInterval()
@@ -188,7 +191,7 @@ def Parse_ast1(buf):
     parser.removeErrorListeners()
     parser.addErrorListener(ConsoleErrorListener())
     tree = parser.program()
-    visitor = JSV()
+    visitor = MyVisitor()
     try:
         visitor.visit(tree)
     except RecursionError:
@@ -241,7 +244,7 @@ def insertTamplate(rewriter):
                         null;
                         }
                     });
-                    print(a_v);
+                    print("qbtly_aviliable[" + a_v + "]qbtly_var");
                     print("qbtly_start[" + output.join(",\n") + "]qbtly_end");
                     isExecuted = true; // 设置标志为 true，防止代码再次执行
                 }
@@ -261,15 +264,18 @@ def get_property(rewriter, engine_path):
 
     news = insertTamplate(rewriter)
     with open("pymodules/arr1.js", "r", encoding='utf-8') as js_file1:
+    # with open("arr1.js", "r", encoding='utf-8') as js_file1:
         js1 = js_file1.read()
 
     IntervalEnd_VariableNames_tmp = IntervalEnd_VariableNames
     keys = list(IntervalEnd_VariableNames_tmp.keys())
     for interval_end in keys:
+
         if len(IntervalEnd_VariableNames_tmp[interval_end]) <= 0:
             continue
         index = keys.index(interval_end)
         with open(f"pymodules/output/{engine_name}/output{index}.js", "w", encoding='utf-8') as js_file:
+        # with open(f"output/output{index}.js", "w", encoding='utf-8') as js_file:
             js_file.write(js1)
             js_file.write("\n\n")
             js_file.write(news[interval_end])
@@ -280,7 +286,10 @@ def get_property(rewriter, engine_path):
             cmd.append(item)
         cmd.append(f"pymodules/output/{engine_name}/output{index}.js")
 
+        # cmd = ["/home/qbtly/Desktop/target/V8/v8/0124/d8", "--allow-natives-syntax", "--expose-gc", f"output/output{index}.js"]
+
         result = subprocess.run(cmd, capture_output=True, text=True)
+        # print(result.stdout)
         pattern1 = r'qbtly_aviliable(.*?)qbtly_var'
         # 去除首尾的方括号并按逗号分割字符串
         js_list = str(tools.extract(result.stdout, pattern1)).strip('[]').split(',')
@@ -308,6 +317,7 @@ def get_property(rewriter, engine_path):
 
         IntervalEnd_Vardicts[interval_end] = var_dicts
     # print("IntervalEnd_Vardicts: ", IntervalEnd_Vardicts)
+    # print("IntervalEnd_VariableNames: ", IntervalEnd_VariableNames)
     return IntervalEnd_Vardicts
 
     # [
@@ -349,6 +359,7 @@ def get_property_call(obj):
 
     # method or attr
     chosen_type = random.choice(["methods", "attrs"])
+    # chosen_type = random.choice(["methods"])
     if chosen_type == "methods":
         try:
             chosen_method = random.choice(obj["methods"])
@@ -382,13 +393,14 @@ def generate(rewriter, intervalend_vardicts):
             # 生成一条方法调用
             new_statement = get_property_call(obj)
             # 调整
-            change_p = 1.0
+            change_p = 0.5
             for n in range(3):
+                # random.shuffle(IntervalEnd_VariableNames[interval_end])
                 ran = random.random()
                 if "tmp_number" in new_statement:
                     # Number
                     try:
-                        if ran < 0.8:
+                        if ran < change_p:
                             # new_arg = random.choice(obj_name8type['Number'])
                             new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
                         else:
@@ -396,12 +408,12 @@ def generate(rewriter, intervalend_vardicts):
                     except:
                         new_arg = generator.get_number()
                     # 替换
-                    new_statement = new_statement.replace("tmp_number", str(new_arg))
+                    new_statement = new_statement.replace("tmp_number", str(new_arg), 1)
                     pass
                 elif "tmp_array" in new_statement:
                     # Array
                     try:
-                        if ran < 0.8:
+                        if ran < change_p:
                             # new_array = random.choice(obj_name8type['Array'])
                             new_array = random.choice(IntervalEnd_VariableNames[interval_end])
                         else:
@@ -409,11 +421,11 @@ def generate(rewriter, intervalend_vardicts):
                     except:
                         new_array = generator.get_array()
                     # 替换
-                    new_statement = new_statement.replace("tmp_array", str(new_array))
+                    new_statement = new_statement.replace("tmp_array", str(new_array), 1)
                 elif "tmp_string" in new_statement:
                     # String
                     try:
-                        if ran < 0.8:
+                        if ran < change_p:
                             # new_arg = random.choice(obj_name8type['String'])
                             new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
                         else:
@@ -421,53 +433,55 @@ def generate(rewriter, intervalend_vardicts):
                     except:
                         new_arg = generator.get_string()
                     # 替换
-                    new_statement = new_statement.replace("tmp_string", new_arg)
+                    new_statement = new_statement.replace("tmp_string", new_arg, 1)
                 elif "tmp_object" in new_statement:
                     # Object
                     try:
-                        if ran < 0.8:
+                        if ran < change_p:
                             new_arg = random.choice(obj_name8type['Object'])
                             # new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
                         else:
                             new_arg = generator.get_string()
                     except:
-                        if ran < 0.5:
+                        if ran < change_p:
                             new_arg = generator.get_string()
                         else:
                             new_arg = generator.get_number()
                     # 替换
-                    new_statement = new_statement.replace("tmp_object", new_arg)
+                    new_statement = new_statement.replace("tmp_object", new_arg, 1)
                 elif "tmp_function" in new_statement:
                     # Function
                     try:
-                        if ran < 0.8:
+                        if ran < change_p:
                             new_arg = random.choice(obj_name8type['Function'])
                             # new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
                         else:
                             new_arg = generator.get_string()
                     except:
-                        if ran < 0.5:
+                        if ran < change_p:
                             new_arg = generator.get_string()
                         else:
                             new_arg = generator.get_number()
                     # 替换
-                    new_statement = new_statement.replace("tmp_function", new_arg)
+                    new_statement = new_statement.replace("tmp_function", new_arg, 1)
                 elif "tmp_any" in new_statement:
                     try:
                         new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
                     except:
-                        if ran < 0.5:
+                        if ran < change_p:
                             new_arg = generator.get_string()
                         else:
                             new_arg = generator.get_number()
                     # 替换
-                    new_statement = new_statement.replace("tmp_any", new_arg)
+                    new_statement = new_statement.replace("tmp_any", new_arg, 1)
                 # 未完待续
+                # print(new_statement)
 
             # 插入
             rewriter.insertAfter(interval_end, new_statement)
+            # print(new_statement)
     new_sample = rewriter.getDefaultText()
-    # print(intervalend_vardicts)
+
     # print(new_sample)
     return new_sample
 
@@ -489,6 +503,7 @@ def change(rewriter, all_type):
 
 @SetTimeoutDecorator(timeout=30)
 def jungle(buf, add_buf):
+
     is_done1, is_timeout1, erro_message1, results1 = checkParsetime(buf)
     is_done2, is_timeout2, erro_message2, results2 = checkParsetime(add_buf)
     if is_timeout1 is True or is_timeout2 is True:
@@ -503,7 +518,7 @@ def jungle(buf, add_buf):
         all_type.append(t)
     new_sample = ""
     count = 0
-    change_p = 0.9
+    change_p = 1.0
     while count < config.sample_size:
         count += 1  # 增加迭代计数
         rewriter.rollback(rewriter.lastRewriteTokenIndex(), "default")
@@ -540,6 +555,14 @@ def parse(buf, add_buf):
 
 if __name__ == '__main__':
     # 示例 JavaScript 代码
-    js_code = js.js_code
+    js_code = js.js_code4
     js_code2 = js.js_code2
     length = parse(js_code.encode(), js_code.encode())
+    print("Total Samples: ", length)
+    if length > 0:
+        for i in range(0, length):
+            with open("/home/qbtly/Desktop/aaaaa/b/" + str(i) + ".js", "w") as f:
+                f.write(fuzz().decode())
+                f.close()
+            # print(fuzz().decode())
+    print("/home/qbtly/Desktop/aaaaa/b")
