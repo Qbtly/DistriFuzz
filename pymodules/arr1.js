@@ -77,8 +77,8 @@ var varIntrospect = (objname, obj) => {
 //        }
 //    }
 
-    var objtype = obj.constructor.name;
-    if(objtype === 'String' || objtype.includes('Array')){
+    var type = obj.constructor.name;
+    if(type === 'String' || type.includes('Array')){
         for(var index in attrs){
             var attr = attrs[index];
             if((!isNaN(parseInt(index)) && attr === 'String') || (!isNaN(parseInt(index)) && attr === 'string')||
@@ -87,7 +87,8 @@ var varIntrospect = (objname, obj) => {
             }
         }
     }
-    return {'obj':objname, 'objtype':objtype, 'methods':methods, 'attrs':attrs};
+    return {'obj':objname, 'type':type, 'methods':methods, 'attrs':attrs};
+//    return {'obj':objname, 'type':type};
 };
 function setReplacer(key, value) {
   if (value instanceof Set) {
@@ -97,4 +98,5 @@ function setReplacer(key, value) {
 }
 //mark
 let isExecuted = false;
+let a_v = [];
 /////////////////////////////////////////////////////////////////////////////////////

@@ -3,6 +3,7 @@ var varIntrospect = (objname, obj) => {
     var methods = new Set();
 
     if(obj === undefined || obj === null){
+    print(obj,"undefined")
         return;
     }
     var enumerableProperties = Array.isArray(obj) ? Object.keys(obj) : null;
@@ -77,8 +78,8 @@ var varIntrospect = (objname, obj) => {
 //        }
 //    }
 
-    var objtype = obj.constructor.name;
-    if(objtype === 'String' || objtype.includes('Array')){
+    var type = obj.constructor.name;
+    if(type === 'String' || type.includes('Array')){
         for(var index in attrs){
             var attr = attrs[index];
             if((!isNaN(parseInt(index)) && attr === 'String') || (!isNaN(parseInt(index)) && attr === 'string')||
@@ -87,7 +88,8 @@ var varIntrospect = (objname, obj) => {
             }
         }
     }
-    return {'obj':objname, 'objtype':objtype, 'methods':methods, 'attrs':attrs};
+    return {'obj':objname, 'type':type, 'methods':methods, 'attrs':attrs};
+//    return {'obj':objname, 'type':type};
 };
 function setReplacer(key, value) {
   if (value instanceof Set) {
@@ -97,40 +99,42 @@ function setReplacer(key, value) {
 }
 //mark
 let isExecuted = false;
+let a_v = [];
 /////////////////////////////////////////////////////////////////////////////////////
 
 
 
-const ab = new ArrayBuffer(0x1000, { "maxByteLength": 0x4000 });
-const u8 = new Uint8Array(ab);
-
-let callback = {
-    valueOf() {
-        ab.resize(0);
-        return 0;
+var a=[];
+for(var i=0;i<100;i++){
+    a.push(i+0.123);
+}
+let b={
+    valueOf(){
+//        a.length=0;
 ////////////////////probe/////////////////////////
 
-         let variableNames = ['ab', 'u8'];
-        if (!isExecuted) {
-            let output = [];
-            variableNames.forEach(varName => {
-            try{
-                let varInstance = eval(varName);
-                let typeInfo = varIntrospect(varName, varInstance);
-                if (typeInfo !== undefined)
-                    output.push(JSON.stringify(typeInfo, setReplacer, 2));
-            }catch(err){
-                null;
+         let variableNames = ['i', 'c', 'a.length', 'b'];
+                if (!isExecuted) {
+                    let output = [];
+                    variableNames.forEach(varName => {
+                    try{
+                        let varInstance = eval(varName);
+                        let typeInfo = varIntrospect(varName, varInstance);
+//                        if (typeInfo !== undefined)
+                            output.push(JSON.stringify(typeInfo, setReplacer, 2));
+                            a_v.push(varName);
+                    }catch(err){
+                        print(varName);
+                        }
+                    });
+                    print("qbtly_aviliable[" + a_v + "]qbtly_var");
+                    print("qbtly_start[" + output.join(",\n") + "]qbtly_end");
+                    isExecuted = true; // 设置标志为 true，防止代码再次执行
                 }
-            });
-            console.log("qbtly_start[" + output.join(",\n") + "]qbtly_end");
-            isExecuted = true; // 设置标志为 true，防止代码再次执行
-        }
-            
+                    
 ////////////////////probe/////////////////////////
 
+        return 10;
     }
 };
-
-u8.copyWithin(0x20, callback);
-
+var c=a.slice(0,b);

@@ -106,7 +106,7 @@ builtins = ["Array", "ArrayBuffer", "AggregateError", "apply", "abs", "acos", "a
 "%WasmTierUpFunction", "%IsLiftoffFunction"]
 
 token_size = 200
-sample_size = 10000
+sample_size = 2000
 train = False
 
 ids = []

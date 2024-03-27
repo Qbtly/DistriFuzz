@@ -65,3 +65,13 @@ def get_array():
     random_array = random.choices(sample_elements)
     return random_array
 
+def random_generate(objtype):
+    result = 0
+    objtype = str(objtype)
+    if objtype.lower() == 'string':
+        result = get_string()
+    elif objtype.lower() == 'array':
+        result = get_array()
+    elif objtype.lower() == 'number':
+        result = get_number()
+    return result

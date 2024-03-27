@@ -1,14 +1,6 @@
 import os
 import random
 import json
-import shutil
-import sys
-import time
-import traceback
-
-import config
-import re
-from pathlib import Path
 import config
 # from call_function_with_timeout import SetTimeoutDecorator
 from antlr4.CommonTokenStream import CommonTokenStream
@@ -22,12 +14,12 @@ from JavaScriptParserVisitor2 import JavaScriptParserVisitor2 as JSV2
 import subprocess
 import basic
 import generator
-from pymodules import js, tools
-from pymodules.tools import set_timeout
+import js, tools
+from tools import set_timeout
 
 IntervalEnd_Vardicts = {}
 engine = "/home/qbtly/Desktop/target/V8/v8/0124/d8"
-VariableNames = []
+VariableNames = set()
 obj_name8type = {}
 IntervalEnd_VariableNames = {}  # 用于存储变量名和它们所在的行号
 avaliableInterval = []
@@ -38,6 +30,7 @@ class Scope:
         self.name = name
         self.parent = parent
         self.variables = {}
+        self.closure_variables = set()  # 用于存储闭包变量
 
 
 class MyVisitor(JSV):
@@ -53,7 +46,11 @@ class MyVisitor(JSV):
             name = f"block_{self.scopeCounter}"
             self.scopeCounter += 1
         # 进入新的作用域
+        parent_closure_variables = set()
+        if self.currentScope.parent:
+            parent_closure_variables.update(self.currentScope.parent.closure_variables)
         self.currentScope = Scope(name=name, parent=self.currentScope)
+        self.currentScope.parent.closure_variables.update(parent_closure_variables)
         self.scopes.append(self.currentScope)
 
     def exitScope(self):
@@ -61,29 +58,11 @@ class MyVisitor(JSV):
         self.scopes.pop()
         self.currentScope = self.scopes[-1] if self.scopes else self.globalScope
 
-    def visitExpressionStatement(self, ctx):
-        # 使用expressionSequence代替之前假定的expression方法
-        expressionSequence = ctx.expressionSequence()
-        # 这里的逻辑需要根据具体的语法规则来进一步细化
-        # 以下为示例性逻辑，具体实现取决于expressionSequence结构和内容
-        # for expression in expressionSequence.getChildren():
-        #     print(type(expression).__name__)
-        #     print('AssignmentOperatorExpressionContext' == str(type(expression).__name__))
-        #     if 'AssignmentOperatorExpressionContext' in str(type(expression).__name__):
-        #         print(f"找到表达式: {expression.getText()}")
-        super().visitExpressionStatement(ctx)
-
-    def visitAssignmentOperatorExpression(self, ctx):
-        left = ctx.singleExpression(0).getText()
-        right = ctx.singleExpression(1).getText()
-        print(left, right)
-        super().visitExpressionStatement(ctx)
-        pass
-
     def visitFunctionDeclaration(self, ctx):
         function_name = ctx.identifier().getText()
+        # VariableNames.add(function_name)
         interval = ctx.getSourceInterval()
-        self.currentScope.variables[function_name] = interval[1]
+        # self.currentScope.variables[function_name] = interval[1]
 
         self.enterScope(function_name)
         super().visitFunctionDeclaration(ctx)
@@ -92,7 +71,7 @@ class MyVisitor(JSV):
     def visitClassDeclaration(self, ctx):
         class_name = ctx.identifier().getText()
         interval = ctx.getSourceInterval()
-        self.currentScope.variables[class_name] = interval[1]
+        # self.currentScope.variables[class_name] = interval[1]
 
         self.enterScope(class_name)
         super().visitFunctionDeclaration(ctx)
@@ -103,12 +82,42 @@ class MyVisitor(JSV):
         super().visitBlock(ctx)
         self.exitScope()
 
-    def visitVariableDeclaration(self, ctx):
-        var_name = ctx.assignable().getText()
+    def visitIdentifier(self, ctx):
+        var_name = ctx.getText()
         interval = ctx.getSourceInterval()
-        self.currentScope.variables[var_name] = interval[1]
-        # print(var_name, interval)
-        # print(self.currentScope.variables, self.currentScope.name)
+        # print(var_name,interval)
+        if var_name not in config.builtins:
+            VariableNames.add(var_name)
+            if var_name not in list(self.currentScope.variables.keys()):
+                self.currentScope.variables[var_name] = interval[1]
+            # elif var_name in self.currentScope.parent.closure_variables:
+            #     self.currentScope.closure_variables.add(var_name)
+
+        self.enterScope(var_name)
+        super().visitFunctionDeclaration(ctx)
+        self.exitScope()
+
+    def visitVarDeclaration(self, ctx):
+        # for var in ctx.variableDeclaration(0):
+        var_name = ctx.variableDeclaration(0).assignable().getText()
+        interval = ctx.getSourceInterval()
+        if var_name not in config.builtins:
+            if var_name not in self.currentScope.variables:
+                self.currentScope.variables[var_name] = interval[1]
+            # elif var_name in self.currentScope.parent.closure_variables:
+            #     self.currentScope.closure_variables.add(var_name)
+
+    def visitLetConstDeclaration(self, ctx):
+        # 处理 let、const 声明的变量，这里根据具体情况进行实现
+        pass
+
+    def visitVariableDeclarationList(self, ctx):
+        declaration_type = ctx.varModifier().getText()  # 获取变量声明类型，如 var、let、const
+        print(declaration_type)
+        if declaration_type == 'var':
+            self.visitVarDeclaration(ctx)
+        else:
+            self.visitLetConstDeclaration(ctx)
         super().visitVariableDeclaration(ctx)
 
     def visitStatement(self, ctx):
@@ -121,20 +130,19 @@ class MyVisitor(JSV):
     def getVariablesAtIntervalEnd(self, interval):
         # 假设 interval 是一个 (start, end) 元组
         _, interval_end = interval
-        available_variables = []
+        available_variables = set()
         scope = self.currentScope
-        # print(scope.name, '00000')
         # 遍历所有作用域，从当前作用域开始，向上直到全局作用域
         while scope is not None:
-            # print(scope.name, '11111')
+            print(scope.name, '11111', scope.variables)
             for var_name, var_interval in scope.variables.items():
-                # print(var_name, var_interval, interval_end)
-                var_declaration_line = var_interval
-                if var_declaration_line <= interval_end:
-                    available_variables.append(var_name)
+                print(var_name)
+                var_declaration_point = var_interval
+                if var_declaration_point <= interval_end:
+                    available_variables.add(var_name)
             scope = scope.parent  # 移动到父作用域
 
-        return available_variables
+        return list(available_variables)
 
 
 def all_type_text():
@@ -148,6 +156,7 @@ def all_type_text():
             for interval in config.intervals[type]:
                 print(interval, end="  |  ")
             print('\n')
+    exit()
 
 
 def init():
@@ -178,24 +187,21 @@ def Parse_ast(js_code):
     parser.removeErrorListeners()
     parser.addErrorListener(ConsoleErrorListener())
     tree = parser.program()
-    visitor = MyVisitor()
+    visitor = JSV()
     try:
         visitor.visit(tree)
     except RecursionError:
         return
     rewriter = TokenStreamRewriter(tokens=stream)
-    # print("IntervalEnd_VariableNames: ", IntervalEnd_VariableNames)
+    for k in list(IntervalEnd_VariableNames.keys()):
+        IntervalEnd_VariableNames[k] = list(VariableNames)
+    print("IntervalEnd_VariableNames: ", IntervalEnd_VariableNames)
     return rewriter
 
 
 def pre_process(js_code):
     init()
     rewriter = Parse_ast(js_code)
-    for items in list(IntervalEnd_VariableNames.items()):
-        for item in items:
-            if item not in VariableNames:
-                VariableNames.append(item)
-
     return rewriter
 
 
@@ -205,7 +211,26 @@ def insertTamplate(rewriter):
         js_var = str(IntervalEnd_VariableNames[interval_end])
         head = "\n////////////////////probe/////////////////////////\n"
         js_id = "\n         let variableNames = " + str(js_var) + ";"  # 被调用过的
-        tmp = head + js_id + js.get_type + head
+        get_type = r'''
+                if (!isExecuted) {
+                    let output = [];
+                    variableNames.forEach(varName => {
+                    try{
+                        let varInstance = eval(varName);
+                        let typeInfo = varIntrospect(varName, varInstance);
+                        if (typeInfo !== undefined)
+                            output.push(JSON.stringify(typeInfo, setReplacer, 2));
+                            a_v.push(varName);
+                    }catch(err){
+                        null;
+                        }
+                    });
+                    print("qbtly_aviliable[" + a_v + "]qbtly_var");
+                    print("qbtly_start[" + output.join(",\n") + "]qbtly_end");
+                    isExecuted = true; // 设置标志为 true，防止代码再次执行
+                }
+                    '''
+        tmp = head + js_id + get_type + head
         # 插入
         rewriter.insertAfter(interval_end, tmp)
         new = rewriter.getDefaultText()
@@ -214,7 +239,7 @@ def insertTamplate(rewriter):
     return news
 
 
-def get_property(rewriter):
+def get_property(rewriter, engine_path):
     news = insertTamplate(rewriter)
     # print(news)
     with open("arr1.js", "r") as js_file1:
@@ -226,16 +251,24 @@ def get_property(rewriter):
         if len(IntervalEnd_VariableNames_tmp[interval_end]) <= 0:
             continue
         index = keys.index(interval_end)
-        with open(f"./output/output{index}.js", "w") as js_file:
+        with open(f"output/output{index}.js", "w") as js_file:
             js_file.write(js1)
             js_file.write("\n\n")
             js_file.write(news[interval_end])
             # 执行 JavaScript 文件
 
         cmd = [engine, "--allow-natives-syntax", "--expose-gc", f"output/output{index}.js"]
+        cmd = [engine_path, f"output/output{index}.js"]
         result = subprocess.run(cmd, capture_output=True, text=True)
         print(result.stdout)
-        extract_result = tools.extract_json(result.stdout)
+        pattern1 = r'qbtly_aviliable(.*?)qbtly_var'
+        # 去除首尾的方括号并按逗号分割字符串
+        js_list = str(tools.extract(result.stdout, pattern1)).strip('[]').split(',')
+        # 去除空格并转换为 Python 的列表
+        IntervalEnd_VariableNames[interval_end] =  [item.strip() for item in js_list]
+
+        pattern2 = r'qbtly_start(.*?)qbtly_end'
+        extract_result = tools.extract(result.stdout, pattern2)
         var_dicts = []
 
         try:
@@ -243,23 +276,22 @@ def get_property(rewriter):
             # print("提取成功！")
             # print("extract_result:", extract_result)
         except:
-            print("出错了！", index, result.stdout)
-            print("extract_result:", extract_result)
+            # print("出错了！", index, result.stdout)
+            # print("extract_result:", extract_result)
             IntervalEnd_VariableNames.pop(interval_end)
-
+            continue
         # 丰富var_dicts
-        for var_dict in var_dicts:
-            obj_type = var_dict['objtype']
-            if obj_type not in list(obj_name8type.keys()):
-                obj_name8type[obj_type] = []
-            obj_name8type[obj_type].append(var_dict['obj'])
-            var_dict['methods'] = get_call_statements(var_dict['methods'], obj_type)
-            # var_dict["attrs"]
+        # for var_dict in var_dicts:
+        #     obj_type = var_dict['objtype']
+        #     if obj_type not in list(obj_name8type.keys()):
+        #         obj_name8type[obj_type] = []
+        #     obj_name8type[obj_type].append(var_dict['obj'])
+        #     var_dict['methods'] = get_call_statements(var_dict['methods'], obj_type)
 
         IntervalEnd_Vardicts[interval_end] = var_dicts
 
     print("IntervalEnd_Vardicts: ", IntervalEnd_Vardicts)
-
+    print("IntervalEnd_VariableNames: ", IntervalEnd_VariableNames)
     return IntervalEnd_Vardicts
 
     # [
@@ -294,11 +326,7 @@ def get_call_statements(methods, obj_type):
 
 def get_property_call(obj):
     # 新变量名
-    new_var = "zdy"
-    i = 0
-    while new_var + str(i) in VariableNames:
-        i += 1
-    new_var = new_var + str(i)
+    new_var = tools.get_newname(VariableNames)
 
     # 选择obj
     var_name = obj['obj']
@@ -315,6 +343,7 @@ def get_property_call(obj):
         try:
             chosen_attr = random.choice(list(obj[chosen_type].keys()))
             call_statement = f"\nlet {new_var} = {var_name}.{chosen_attr};\n"
+            call_statement += f"\n{var_name}.{chosen_attr} = {generator.random_generate(obj[chosen_type][chosen_attr])};\n"
         except:
             try:
                 chosen_method = random.choice(obj["methods"])
@@ -334,53 +363,96 @@ def generate(rewriter, intervalend_vardicts):
         objs = intervalend_vardicts[interval_end]
         if len(objs) > 0:
             obj = random.choice(objs)
-            # print(interval_end, var_name)
             # 生成一条方法调用
             new_statement = get_property_call(obj)
-            # print(interval_end,var_name,new_statement)
             # 调整
             change_p = 1.0
             for n in range(3):
                 ran = random.random()
-                if "tmp_num" in new_statement:
+                if "tmp_number" in new_statement:
                     # Number
                     try:
                         if ran < 0.8:
-                            new_num = random.choice(obj_name8type['Number'])
+                            # new_arg = random.choice(obj_name8type['Number'])
+                            new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
                         else:
-                            new_num = generator.get_number()
+                            new_arg = generator.get_number()
                     except:
-                        new_num = generator.get_number()
+                        new_arg = generator.get_number()
                     # 替换
-                    new_statement = new_statement.replace("tmp_num", str(new_num))
+                    new_statement = new_statement.replace("tmp_number", str(new_arg))
                     pass
                 elif "tmp_array" in new_statement:
                     # Array
                     try:
                         if ran < 0.8:
-                            new_array = random.choice(obj_name8type['Array'])
+                            # new_array = random.choice(obj_name8type['Array'])
+                            new_array = random.choice(IntervalEnd_VariableNames[interval_end])
                         else:
                             new_array = generator.get_array()
                     except:
                         new_array = generator.get_array()
                     # 替换
                     new_statement = new_statement.replace("tmp_array", str(new_array))
-                elif "tmp_str" in new_statement:
+                elif "tmp_string" in new_statement:
                     # String
                     try:
                         if ran < 0.8:
-                            new_str = random.choice(obj_name8type['String'])
+                            # new_arg = random.choice(obj_name8type['String'])
+                            new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
                         else:
-                            new_str = generator.get_string()
+                            new_arg = generator.get_string()
                     except:
-                        new_str = generator.get_string()
+                        new_arg = generator.get_string()
                     # 替换
-                    new_statement = new_statement.replace("tmp_str", new_str)
+                    new_statement = new_statement.replace("tmp_string", new_arg)
+                elif "tmp_object" in new_statement:
+                    # Object
+                    try:
+                        if ran < 0.8:
+                            new_arg = random.choice(obj_name8type['Object'])
+                            # new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
+                        else:
+                            new_arg = generator.get_string()
+                    except:
+                        if ran < 0.5:
+                            new_arg = generator.get_string()
+                        else:
+                            new_arg = generator.get_number()
+                    # 替换
+                    new_statement = new_statement.replace("tmp_object", new_arg)
+                elif "tmp_function" in new_statement:
+                    # Function
+                    try:
+                        if ran < 0.8:
+                            new_arg = random.choice(obj_name8type['Function'])
+                            # new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
+                        else:
+                            new_arg = generator.get_string()
+                    except:
+                        if ran < 0.5:
+                            new_arg = generator.get_string()
+                        else:
+                            new_arg = generator.get_number()
+                    # 替换
+                    new_statement = new_statement.replace("tmp_function", new_arg)
+                elif "tmp_any" in new_statement:
+                    try:
+                        new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
+                    except:
+                        if ran < 0.5:
+                            new_arg = generator.get_string()
+                        else:
+                            new_arg = generator.get_number()
+                    # 替换
+                    new_statement = new_statement.replace("tmp_any", new_arg)
                 # 未完待续
-
+            print(new_statement)
             # 插入
             rewriter.insertAfter(interval_end, new_statement)
     new_sample = rewriter.getDefaultText()
+    # print(intervalend_vardicts)
+    # print(new_sample)
     return new_sample
 
 
@@ -412,13 +484,15 @@ def after_timeout():  # 超时后的处理函数
     print("Timeout!")
 
 
-@set_timeout(20, after_timeout())  # 限时 2 秒
+# @set_timeout(20, after_timeout())  # 限时 2 秒
 def parse(js_code, add_buf):
-    rewriter = pre_process(js_code.encode())
+    engine_path = "/home/qbtly/Desktop/target/V8/v8/0207/d8"
+    # engine_path = "/home/qbtly/Desktop/target/jerryscript/reeee/bin/jerry"
+    rewriter = pre_process(js_code)
     # all_type_text()
-
-    intervalend_vardicts = get_property(rewriter)
-    return 0
+    intervalend_vardicts = get_property(rewriter, engine_path)
+    print("VariableNames:", VariableNames)
+    exit()
     all_type = init2()
     for t in [65, 73, 76, 80, 65, 73, 76, 80, 65, 73, 76, 80, 81]:
         all_type.append(t)
@@ -448,45 +522,15 @@ def parse(js_code, add_buf):
 
 
 if __name__ == '__main__':
-
     # 示例 JavaScript 代码
     js_code = js.js_code
     js_code2 = js.js_code2
-    length = parse(js_code2, js_code2)
-    # print("Total Samples: ", length)
-    # if length > 0:
-    #     for i in range(0, length):
-    #         with open("/home/qbtly/Desktop/aaaaa/b/" + str(i) + ".js", "w") as f:
-    #             f.write(fuzz().decode())
-    #             f.close()
-    #         # print(fuzz().decode())
-    # print("/home/qbtly/Desktop/aaaaa/b")
-
-    exit()
-    poc_dir = "/home/qbtly/Desktop/PatchFuzz/js/js_poc/v8/"
-    directory_path = Path(poc_dir)
-    i = 0
-    for file in directory_path.rglob('*'):
-        if i < 0:
-            i = i + 1
-            continue
-        IntervalEnd_Vardicts = {}
-        engine = "/home/qbtly/Desktop/target/V8/v8/0124/d8"
-        VariableNames = []
-        obj_name8type = {}
-        IntervalEnd_VariableNames = {}  # 用于存储变量名和它们所在的行号
-        avaliableInterval = []
-        if file.is_file():
-            try:
-                print(i, file)
-                with open(file, 'r') as f:
-                    js_content = f.read()
-                    # print(js_content)
-                    length = parse(js_content, js_content)
-                    # print("Total Samples: ", length, file)
-            except Exception as e:
-                print(file, e)
-        i = i + 1
-        # exit()
-        # input("?")
-        # tools.del_file("/home/qbtly/Desktop/myh_fuzzer/pymodules/output/")
+    length = parse(js_code.encode(), js_code2.encode())
+    print("Total Samples: ", length)
+    if length > 0:
+        for i in range(0, length):
+            with open("/home/qbtly/Desktop/aaaaa/b/" + str(i) + ".js", "w") as f:
+                f.write(fuzz().decode())
+                f.close()
+            # print(fuzz().decode())
+    print("/home/qbtly/Desktop/aaaaa/b")

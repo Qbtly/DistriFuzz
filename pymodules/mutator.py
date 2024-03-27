@@ -26,7 +26,6 @@ from JavaScriptParser import JavaScriptParser as JSP
 from JavaScriptParserVisitor import JavaScriptParserVisitor as JSV
 from JavaScriptParserVisitor2 import JavaScriptParserVisitor2 as JSV2
 
-
 @SetTimeoutDecorator(timeout=10)
 def checkParsetime(buf0):
     js_sample0 = buf0.decode()

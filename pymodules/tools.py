@@ -1,9 +1,22 @@
 import os
+import random
 import shutil
 import re
 # coding=utf-8
 import signal
-import time
+import config
+
+
+def all_type_text():
+    for type in range(0, 86):
+        if type == type:
+            print(type, end=': ')
+            for text in config.texts[type]:
+                print(text, end="  |  ")
+            print('\n')
+            for interval in config.intervals[type]:
+                print(interval, end="  |  ")
+            print('\n')
 
 
 def set_timeout(num, callback):
@@ -29,8 +42,7 @@ def set_timeout(num, callback):
 
     return wrap
 
-def extract_json(text):
-    pattern = r'qbtly_start(.*?)qbtly_end'  # 使用非贪婪匹配，提取每对 PT 和 ER 之间的内容
+def extract(text, pattern):
     matches = re.findall(pattern, text, re.DOTALL)
     if matches:
         return matches[0]
@@ -60,3 +72,14 @@ def select_by_obj_name(data, obj, obj_name):
         return dict_list[0]
     except:
         return {}
+
+def get_newname(names):
+    new_name = "zdy"
+    i = 0
+    while new_name + str(i) in names:
+        i += 1
+        if i > 30:
+            i = random.randint(31, 1000)
+            break
+    new_name = new_name + str(i)
+    return new_name

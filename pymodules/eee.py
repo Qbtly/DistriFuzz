@@ -1,16 +1,8 @@
+import datetime
 import os
 import random
 import json
-import shutil
-import sys
-import time
-import traceback
-
 import config
-import re
-from pathlib import Path
-import config
-# from call_function_with_timeout import SetTimeoutDecorator
 from antlr4.CommonTokenStream import CommonTokenStream
 from antlr4.InputStream import InputStream
 from antlr4.TokenStreamRewriter import TokenStreamRewriter
@@ -19,16 +11,15 @@ from JavaScriptLexer import JavaScriptLexer as JSL
 from JavaScriptParser import JavaScriptParser as JSP
 from JavaScriptParserVisitor import JavaScriptParserVisitor as JSV
 from JavaScriptParserVisitor2 import JavaScriptParserVisitor2 as JSV2
+from call_function_with_timeout import SetTimeoutDecorator
 import subprocess
 import basic
 import generator
 import js
 import tools
-from tools import set_timeout
 
 IntervalEnd_Vardicts = {}
-engine = "/home/qbtly/Desktop/target/V8/v8/0124/d8"
-VariableNames = []
+VariableNames = set()
 obj_name8type = {}
 IntervalEnd_VariableNames = {}  # 用于存储变量名和它们所在的行号
 avaliableInterval = []
@@ -62,12 +53,42 @@ class MyVisitor(JSV):
         self.scopes.pop()
         self.currentScope = self.scopes[-1] if self.scopes else self.globalScope
 
+    # def visitExpressionStatement(self, ctx):
+    #     # 使用expressionSequence代替之前假定的expression方法
+    #     expressionSequence = ctx.expressionSequence()
+    #     for expression in expressionSequence.getChildren():
+    #         # print(type(expression).__name__)
+    #         if 'AssignmentOperatorExpressionContext' in str(type(expression).__name__):
+    #             name = expression.getText()
+    #             VariableNames.add(name)
+    #     #         print(f"找到表达式: {expression.getText()}")
+    #     super().visitExpressionStatement(ctx)
+    #
+    # def visitAssignmentOperatorExpression(self, ctx):
+    #     left = ctx.singleExpression(0).getText()
+    #     right = ctx.singleExpression(1).getText()
+    #     # print(left, right)
+    #     super().visitExpressionStatement(ctx)
+
     def visitFunctionDeclaration(self, ctx):
         function_name = ctx.identifier().getText()
+        VariableNames.add(function_name)
         interval = ctx.getSourceInterval()
-        self.currentScope.variables[function_name] = interval[1]
+        if function_name not in list(self.currentScope.variables.keys()):
+            self.currentScope.variables[function_name] = interval[1]
 
         self.enterScope(function_name)
+        super().visitFunctionDeclaration(ctx)
+        self.exitScope()
+
+    def visitClassDeclaration(self, ctx):
+        class_name = ctx.identifier().getText()
+        VariableNames.add(class_name)
+        interval = ctx.getSourceInterval()
+        if class_name not in list(self.currentScope.variables.keys()):
+            self.currentScope.variables[class_name] = interval[1]
+
+        self.enterScope(class_name)
         super().visitFunctionDeclaration(ctx)
         self.exitScope()
 
@@ -78,11 +99,22 @@ class MyVisitor(JSV):
 
     def visitVariableDeclaration(self, ctx):
         var_name = ctx.assignable().getText()
+        VariableNames.add(var_name)
         interval = ctx.getSourceInterval()
-        self.currentScope.variables[var_name] = interval[1]
+        if var_name not in list(self.currentScope.variables.keys()):
+            self.currentScope.variables[var_name] = interval[1]
         # print(var_name, interval)
         # print(self.currentScope.variables, self.currentScope.name)
         super().visitVariableDeclaration(ctx)
+
+    def visitIdentifier(self, ctx):
+        var_name = ctx.getText()
+        interval = ctx.getSourceInterval()
+        # print(var_name,interval)
+        if var_name not in config.builtins:
+            VariableNames.add(var_name)
+            if var_name not in list(self.currentScope.variables.keys()):
+                self.currentScope.variables[var_name] = interval[1]
 
     def visitStatement(self, ctx):
         interval = ctx.getSourceInterval()
@@ -90,112 +122,32 @@ class MyVisitor(JSV):
         if interval[1] not in avaliableInterval:
             avaliableInterval.append(interval[1])
             IntervalEnd_VariableNames[interval[1]] = self.getVariablesAtIntervalEnd(interval)
+        self.enterScope()
+        super().visitBlock(ctx)
+        self.exitScope()
 
     def getVariablesAtIntervalEnd(self, interval):
         # 假设 interval 是一个 (start, end) 元组
         _, interval_end = interval
-        available_variables = []
+        available_variables = set()
         scope = self.currentScope
-        # print(scope.name, '00000')
         # 遍历所有作用域，从当前作用域开始，向上直到全局作用域
         while scope is not None:
-            # print(scope.name, '11111')
             for var_name, var_interval in scope.variables.items():
-                # print(var_name, var_interval, interval_end)
                 var_declaration_line = var_interval
                 if var_declaration_line <= interval_end:
-                    available_variables.append(var_name)
+                    available_variables.add(var_name)
             scope = scope.parent  # 移动到父作用域
 
-        return available_variables
-
-
-# class MyVisitor(JSV):
-#     def __init__(self):
-#         super().__init__()
-#         self.isGlobalScope = True
-#         self.currentScope = "global"  # 增加当前作用域跟踪
-#
-#     def visitFunctionDeclaration(self, ctx):
-#         functionName = ctx.identifier().getText()  # 获取函数名称
-#         line_number = ctx.stop.line  # 获取变量声明的行号
-#         # 如果成功获取到函数名
-#         if functionName:
-#             # 假设这里的VariableNames是一个字典结构，用来记录变量名或函数名及其信息
-#             if self.isGlobalScope:
-#                 # 记录函数名作为全局作用域下的一个变量/函数
-#                 if "global" not in IntervalEnd_VariableNames:
-#                     IntervalEnd_VariableNames["global"] = {}
-#                 IntervalEnd_VariableNames["global"][functionName] = line_number  # 也可以添加更多相关信息，比如行号
-#         self.isGlobalScope = False
-#         previousScope = self.currentScope
-#         self.currentScope = functionName  # 更新当前作用域为函数名
-#         self.visitChildren(ctx)
-#         self.currentScope = previousScope  # 恢复之前的作用域
-#         self.isGlobalScope = True
-#
-#     def visitVariableDeclaration(self, ctx):
-#         var_name = ctx.assignable().getText()
-#         line_number = ctx.start.line  # 获取变量声明的行号
-#         if self.isGlobalScope:
-#             # 保存变量名和它们的行号，如果在全局作用域
-#             if "global" not in IntervalEnd_VariableNames:
-#                 IntervalEnd_VariableNames["global"] = {}
-#             IntervalEnd_VariableNames["global"][var_name] = line_number
-#         else:
-#             # 保存变量名和它们的行号，根据当前函数作用域
-#             if self.currentScope not in IntervalEnd_VariableNames:
-#                 IntervalEnd_VariableNames[self.currentScope] = {}
-#             IntervalEnd_VariableNames[self.currentScope][var_name] = line_number
-#         self.visitChildren(ctx)
-#
-#     def visitStatement(self, ctx):
-#         if ctx.expressionStatement():
-#
-#             interval = ctx.getSourceInterval()
-#             print(ctx.getText())
-#             # 检查是否处于全局作用域
-#             if self.isGlobalScope:
-#                 if "global" not in IntervalEnd_VariableNames:
-#                     IntervalEnd_VariableNames["global"] = {}
-#                 IntervalEnd_VariableNames["global"][ctx.getText()] = interval
-#             else:
-#                 if self.currentScope not in IntervalEnd_VariableNames:
-#                     IntervalEnd_VariableNames[self.currentScope] = {}
-#                 IntervalEnd_VariableNames[self.currentScope][ctx.getText()] = interval
-#         # 检查语句类型是否为变量声明
-#         if ctx.functionDeclaration():
-#             functionName = ctx.functionDeclaration().identifier().getText()  # 获取函数名称
-#             line_number = ctx.stop.line  # 获取变量声明的行号
-#
-#             # 检查是否处于全局作用域
-#             if self.isGlobalScope:
-#                 if "global" not in IntervalEnd_VariableNames:
-#                     IntervalEnd_VariableNames["global"] = {}
-#                 IntervalEnd_VariableNames["global"][functionName] = line_number
-#             else:
-#                 if self.currentScope not in IntervalEnd_VariableNames:
-#                     IntervalEnd_VariableNames[self.currentScope] = {}
-#                 IntervalEnd_VariableNames[self.currentScope][functionName] = line_number
-#         # 其他类型的语句可以根据需要添加额外的处理逻辑
-#
-#         # 继续遍历子节点
-#         self.visitChildren(ctx)
-
-
-def all_type_text():
-    # print(IntervalEnd_VariableNames)
-    for type in range(0, 86):
-        print(type, end=': ')
-        for text in config.texts[type]:
-            print(text, end="  |  ")
-        print('\n')
-        for interval in config.intervals[type]:
-            print(interval, end="  |  ")
-        print('\n')
+        return list(available_variables)
 
 
 def init():
+    IntervalEnd_Vardicts = {}
+    VariableNames = set()
+    obj_name8type = {}
+    IntervalEnd_VariableNames = {}  # 用于存储变量名和它们所在的行号
+    avaliableInterval = []
     config.ids = []
     config.intervals = {}
     for type in range(0, 200):
@@ -215,31 +167,57 @@ def init2():
     return all_type
 
 
-def Parse_ast(js_code):
-    input_stream = InputStream(js_code.decode())
+@SetTimeoutDecorator(timeout=10)
+def checkParsetime(buf0):
+    js_sample0 = buf0.decode()
+    input_stream0 = InputStream(js_sample0)
+    lexer0 = JSL(input_stream0)
+    stream0 = CommonTokenStream(lexer0)
+    parser0 = JSP(stream0)
+    parser0.removeErrorListeners()
+    parser0.addErrorListener(ConsoleErrorListener())
+    tree0 = parser0.program()
+    return True
+
+
+def Parse_ast1(buf):
+    input_stream = InputStream(buf.decode('utf-8', 'ignore'))
     lexer = JSL(input_stream)
     stream = CommonTokenStream(lexer)
     parser = JSP(stream)
     parser.removeErrorListeners()
     parser.addErrorListener(ConsoleErrorListener())
     tree = parser.program()
-    visitor = MyVisitor()
+    visitor = JSV()
     try:
         visitor.visit(tree)
     except RecursionError:
         return
     rewriter = TokenStreamRewriter(tokens=stream)
+    for k in list(IntervalEnd_VariableNames.keys()):
+        IntervalEnd_VariableNames[k] = list(VariableNames)
     # print("IntervalEnd_VariableNames: ", IntervalEnd_VariableNames)
     return rewriter
 
 
-def pre_process(js_code):
+@SetTimeoutDecorator(timeout=10)
+def Parse_ast2(add_buf):
+    input_stream2 = InputStream(add_buf.decode('utf-8', 'ignore'))
+    lexer2 = JSL(input_stream2)
+    stream2 = CommonTokenStream(lexer2)
+    parser2 = JSP(stream2)
+    tree2 = parser2.program()
+    visitor2 = JSV2()
+    try:
+        visitor2.visit(tree2)
+    except RecursionError:
+        pass
+
+
+def pre_process(buf, add_buf):
     init()
-    rewriter = Parse_ast(js_code)
-    for items in list(IntervalEnd_VariableNames.items()):
-        for item in items:
-            if item not in VariableNames:
-                VariableNames.append(item)
+    rewriter = Parse_ast1(buf)
+    Parse_ast2(add_buf)
     return rewriter
 
 
@@ -249,7 +227,26 @@ def insertTamplate(rewriter):
         js_var = str(IntervalEnd_VariableNames[interval_end])
         head = "\n////////////////////probe/////////////////////////\n"
         js_id = "\n         let variableNames = " + str(js_var) + ";"  # 被调用过的
-        tmp = head + js_id + js.get_type + head
+        get_type = r'''
+                if (!isExecuted) {
+                    let output = [];
+                    variableNames.forEach(varName => {
+                    try{
+                        let varInstance = eval(varName);
+                        let typeInfo = varIntrospect(varName, varInstance);
+                        if (typeInfo !== undefined)
+                            output.push(JSON.stringify(typeInfo, setReplacer, 2));
+                            a_v.push(varName);
+                    }catch(err){
+                        null;
+                        }
+                    });
+                    print(a_v);
+                    print("qbtly_start[" + output.join(",\n") + "]qbtly_end");
+                    isExecuted = true; // 设置标志为 true，防止代码再次执行
+                }
+                    '''
+        tmp = head + js_id + get_type + head
         # 插入
         rewriter.insertAfter(interval_end, tmp)
         new = rewriter.getDefaultText()
@@ -258,10 +255,12 @@ def insertTamplate(rewriter):
     return news
 
 
-def get_property(rewriter):
+def get_property(rewriter, engine_path):
+    engine_paths = engine_path.split(' ')
+    engine_name = engine_paths[0].split('/')[-1]
+
     news = insertTamplate(rewriter)
-    # print(news)
-    with open("arr1.js", "r") as js_file1:
+    with open("pymodules/arr1.js", "r", encoding='utf-8') as js_file1:
         js1 = js_file1.read()
 
     IntervalEnd_VariableNames_tmp = IntervalEnd_VariableNames
@@ -270,28 +269,37 @@ def get_property(rewriter):
         if len(IntervalEnd_VariableNames_tmp[interval_end]) <= 0:
             continue
         index = keys.index(interval_end)
-        with open(f"./output/output{index}.js", "w") as js_file:
+        with open(f"pymodules/output/{engine_name}/output{index}.js", "w", encoding='utf-8') as js_file:
             js_file.write(js1)
             js_file.write("\n\n")
             js_file.write(news[interval_end])
-            # 执行 JavaScript 文件
 
-        cmd = [engine, "--allow-natives-syntax", "--expose-gc", f"output/output{index}.js"]
+        # 执行 JavaScript Samples
+        cmd = []
+        for item in engine_paths:
+            cmd.append(item)
+        cmd.append(f"pymodules/output/{engine_name}/output{index}.js")
+
         result = subprocess.run(cmd, capture_output=True, text=True)
-        extract_result = tools.extract_json(result.stdout)
+        pattern1 = r'qbtly_aviliable(.*?)qbtly_var'
+        # 去除首尾的方括号并按逗号分割字符串
+        js_list = str(tools.extract(result.stdout, pattern1)).strip('[]').split(',')
+        # 去除空格并转换为 Python 的列表
+        IntervalEnd_VariableNames[interval_end] = [item.strip() for item in js_list]
+
+        pattern2 = r'qbtly_start(.*?)qbtly_end'
+        extract_result = tools.extract(result.stdout, pattern2)
         var_dicts = []
 
         try:
             var_dicts = json.loads(extract_result)
-            # print("提取成功！")
         except:
-            print("出错了！", index, result.stdout)
-            print("extract_result:", extract_result)
             IntervalEnd_VariableNames.pop(interval_end)
+            continue
 
         # 丰富var_dicts
         for var_dict in var_dicts:
-            obj_type = var_dict['objtype']
+            obj_type = var_dict['type']
             if obj_type not in list(obj_name8type.keys()):
                 obj_name8type[obj_type] = []
             obj_name8type[obj_type].append(var_dict['obj'])
@@ -299,9 +307,7 @@ def get_property(rewriter):
             # var_dict["attrs"]
 
         IntervalEnd_Vardicts[interval_end] = var_dicts
-
     # print("IntervalEnd_Vardicts: ", IntervalEnd_Vardicts)
-
     return IntervalEnd_Vardicts
 
     # [
@@ -318,16 +324,16 @@ def get_call_statements(methods, obj_type):
     call_statements = []
     if obj_type in list(basic.methods.keys()):
         typed_methods = basic.methods[obj_type]
-        all = list(typed_methods.items())
+        items = list(typed_methods.items())
         b = list(typed_methods.keys())
-        for a in all:
+        for a in items:
             args = ", ".join(a[1])
             call_statement = f"{a[0]}({args})"
             call_statements.append(call_statement)
         for method in methods:
             if method not in b:
                 call_statements.append(f"{method}()")
-                print(obj_type, method)
+                # print(obj_type, method)
     # 输出生成的调用语句
     # for statement in call_statements:
     #     print(statement)
@@ -336,11 +342,7 @@ def get_call_statements(methods, obj_type):
 
 def get_property_call(obj):
     # 新变量名
-    new_var = "zdy"
-    i = 0
-    while new_var + str(i) in VariableNames:
-        i += 1
-    new_var = new_var + str(i)
+    new_var = tools.get_newname(VariableNames)
 
     # 选择obj
     var_name = obj['obj']
@@ -350,17 +352,18 @@ def get_property_call(obj):
     if chosen_type == "methods":
         try:
             chosen_method = random.choice(obj["methods"])
-            call_statement = f"\nlet {new_var} = {var_name}.{chosen_method};\n"
+            call_statement = f"\nvar {new_var} = {var_name}.{chosen_method};\n"
         except:
             call_statement = ""
     else:
         try:
             chosen_attr = random.choice(list(obj[chosen_type].keys()))
-            call_statement = f"\nlet {new_var} = {var_name}.{chosen_attr};\n"
+            call_statement = f"\nvar {new_var} = {var_name}.{chosen_attr};\n"
+            call_statement += f"\n{var_name}.{chosen_attr} = {generator.random_generate(obj[chosen_type][chosen_attr])};\n"
         except:
             try:
                 chosen_method = random.choice(obj["methods"])
-                call_statement = f"\nlet {new_var} = {var_name}.{chosen_method};\n"
+                call_statement = f"\nvar {new_var} = {var_name}.{chosen_method};\n"
             except:
                 call_statement = ""
 
@@ -376,53 +379,96 @@ def generate(rewriter, intervalend_vardicts):
         objs = intervalend_vardicts[interval_end]
         if len(objs) > 0:
             obj = random.choice(objs)
-            # print(interval_end, var_name)
             # 生成一条方法调用
             new_statement = get_property_call(obj)
-            # print(interval_end,var_name,new_statement)
             # 调整
             change_p = 1.0
             for n in range(3):
                 ran = random.random()
-                if "tmp_num" in new_statement:
+                if "tmp_number" in new_statement:
                     # Number
                     try:
                         if ran < 0.8:
-                            new_num = random.choice(obj_name8type['Number'])
+                            # new_arg = random.choice(obj_name8type['Number'])
+                            new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
                         else:
-                            new_num = generator.get_number()
+                            new_arg = generator.get_number()
                     except:
-                        new_num = generator.get_number()
+                        new_arg = generator.get_number()
                     # 替换
-                    new_statement = new_statement.replace("tmp_num", str(new_num))
+                    new_statement = new_statement.replace("tmp_number", str(new_arg))
                     pass
                 elif "tmp_array" in new_statement:
                     # Array
                     try:
                         if ran < 0.8:
-                            new_array = random.choice(obj_name8type['Array'])
+                            # new_array = random.choice(obj_name8type['Array'])
+                            new_array = random.choice(IntervalEnd_VariableNames[interval_end])
                         else:
                             new_array = generator.get_array()
                     except:
                         new_array = generator.get_array()
                     # 替换
                     new_statement = new_statement.replace("tmp_array", str(new_array))
-                elif "tmp_str" in new_statement:
+                elif "tmp_string" in new_statement:
                     # String
                     try:
                         if ran < 0.8:
-                            new_str = random.choice(obj_name8type['String'])
+                            # new_arg = random.choice(obj_name8type['String'])
+                            new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
                         else:
-                            new_str = generator.get_string()
+                            new_arg = generator.get_string()
                     except:
-                        new_str = generator.get_string()
+                        new_arg = generator.get_string()
                     # 替换
-                    new_statement = new_statement.replace("tmp_str", new_str)
+                    new_statement = new_statement.replace("tmp_string", new_arg)
+                elif "tmp_object" in new_statement:
+                    # Object
+                    try:
+                        if ran < 0.8:
+                            new_arg = random.choice(obj_name8type['Object'])
+                            # new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
+                        else:
+                            new_arg = generator.get_string()
+                    except:
+                        if ran < 0.5:
+                            new_arg = generator.get_string()
+                        else:
+                            new_arg = generator.get_number()
+                    # 替换
+                    new_statement = new_statement.replace("tmp_object", new_arg)
+                elif "tmp_function" in new_statement:
+                    # Function
+                    try:
+                        if ran < 0.8:
+                            new_arg = random.choice(obj_name8type['Function'])
+                            # new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
+                        else:
+                            new_arg = generator.get_string()
+                    except:
+                        if ran < 0.5:
+                            new_arg = generator.get_string()
+                        else:
+                            new_arg = generator.get_number()
+                    # 替换
+                    new_statement = new_statement.replace("tmp_function", new_arg)
+                elif "tmp_any" in new_statement:
+                    try:
+                        new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
+                    except:
+                        if ran < 0.5:
+                            new_arg = generator.get_string()
+                        else:
+                            new_arg = generator.get_number()
+                    # 替换
+                    new_statement = new_statement.replace("tmp_any", new_arg)
                 # 未完待续
 
             # 插入
             rewriter.insertAfter(interval_end, new_statement)
     new_sample = rewriter.getDefaultText()
+    # print(intervalend_vardicts)
+    # print(new_sample)
     return new_sample
 
 
@@ -438,32 +484,26 @@ def change(rewriter, all_type):
         rewriter.replace("default", interval[0], interval[1], text.strip())
     new_sample = rewriter.getText("default", 0, 10000)
     # new_sample = rewriter.getDefaultText()
-    print(new_sample)
+    # print(new_sample)
     return new_sample
 
+@SetTimeoutDecorator(timeout=30)
+def jungle(buf, add_buf):
+    is_done1, is_timeout1, erro_message1, results1 = checkParsetime(buf)
+    is_done2, is_timeout2, erro_message2, results2 = checkParsetime(add_buf)
+    if is_timeout1 is True or is_timeout2 is True:
+        return len(config.new_samples)
 
-def fuzz():
-    if len(config.new_samples) > 0:
-        sample = config.new_samples.pop(0)
-    else:
-        sample = ""
-    return bytearray(sample.encode())
-
-
-def after_timeout():  # 超时后的处理函数
-    print("Timeout!")
-
-
-@set_timeout(20, after_timeout())  # 限时 2 秒
-def parse(js_code, add_buf):
-    rewriter = pre_process(js_code.encode())
-    intervalend_vardicts = get_property(rewriter)
+    # 获取输出路径
+    engine_path = str(os.environ.get('AFL_ENGINE'))
+    rewriter = pre_process(buf, add_buf)
+    intervalend_vardicts = get_property(rewriter, engine_path)
     all_type = init2()
     for t in [65, 73, 76, 80, 65, 73, 76, 80, 65, 73, 76, 80, 81]:
         all_type.append(t)
     new_sample = ""
     count = 0
-    change_p = 1.0
+    change_p = 0.9
     while count < config.sample_size:
         count += 1  # 增加迭代计数
         rewriter.rollback(rewriter.lastRewriteTokenIndex(), "default")
@@ -482,68 +522,24 @@ def parse(js_code, add_buf):
             config.new_samples.append(new_sample)
             if len(config.new_samples) > config.sample_size:
                 return len(config.new_samples)
+    return len(config.new_samples)
 
+
+def fuzz():
+    if len(config.new_samples) > 0:
+        sample = config.new_samples.pop(0)
+    else:
+        sample = ""
+    return bytearray(sample.encode())
+
+
+def parse(buf, add_buf):
+    jungle(buf, add_buf)
     return len(config.new_samples)
 
 
 if __name__ == '__main__':
-
     # 示例 JavaScript 代码
     js_code = js.js_code
     js_code2 = js.js_code2
-    # length = parse(js_code, js_code)
-    # print("Total Samples: ", length)
-    # if length > 0:
-    #     for i in range(0, length):
-    #         with open("/home/qbtly/Desktop/aaaaa/b/" + str(i) + ".js", "w") as f:
-    #             f.write(fuzz().decode())
-    #             f.close()
-    #         # print(fuzz().decode())
-    # print("/home/qbtly/Desktop/aaaaa/b")
-
-    poc_dir = "/home/qbtly/Desktop/PatchFuzz/js/js_poc/v8"
-    directory_path = Path(poc_dir)
-    i = 0
-    for file in directory_path.rglob('*'):
-        if i < 14:
-            i = i + 1
-            continue
-        IntervalEnd_Vardicts = {}
-        engine = "/home/qbtly/Desktop/target/V8/v8/0124/d8"
-        VariableNames = []
-        obj_name8type = {}
-        IntervalEnd_VariableNames = {}  # 用于存储变量名和它们所在的行号
-        avaliableInterval = []
-        if file.is_file():
-            try:
-                print(i, file)
-                with open(file, 'r') as f:
-                    js_content = f.read()
-                    # print(js_content)
-                    length = parse(js_content, js_content)
-                    print("Total Samples: ", length, file)
-                    filename = file.name.split('.')[0]
-                    dirpath = "/home/qbtly/Desktop/aaaaa/" + filename + "/"
-                    if os.path.isdir(dirpath):
-                        shutil.rmtree(dirpath)
-                    os.mkdir(dirpath)
-                    if length > 0:
-                        for k in range(0, length):
-                            with open(dirpath + filename + "_" + str(k) + ".js", "w") as f:
-                                f.write(fuzz().decode())
-                                f.close()
-                            # print(fuzz().decode())
-                    # print(dirpath)
-            except Exception as e:
-                print(i, file, e)
-                # 这个是输出错误的具体原因
-                # print(e)  # 输出：division by zero
-                # print(sys.exc_info())  # 输出：(<class 'ZeroDivisionError'>, ZeroDivisionError('division by zero'), <traceback object at 0x000001A1A7B03380>)
-                # # 以下两步都是输出错误的具体位置，报错行号位置在第几行
-                # print('\n', '>>>' * 20)
-                # print(traceback.print_exc())
-                # print('\n', '>>>' * 20)
-                # print(traceback.format_exc())
-
-            tools.del_file("/home/qbtly/Desktop/myh_fuzzer/pymodules/output/")
-            i = i + 1
+    length = parse(js_code.encode(), js_code.encode())

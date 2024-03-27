@@ -4,7 +4,7 @@
 # can be found in the LICENSE.txt file in the project root.
 #
 
-import pymodules.config
+# import pymodules.config
 from io import StringIO
 from antlr4.Token import Token
 

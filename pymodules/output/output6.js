@@ -16,7 +16,7 @@ var varIntrospect = (objname, obj) => {
             if (typeof obj[name] === 'function') {
                 methods.add(name);
             }
-            else if (obj.hasOwnProperty(name)) {
+            else if (Object.getPrototypeOf(obj).hasOwnProperty(name)) {
                 attrs[name] = typeof obj[name] === 'object' && obj[name] !== null
                              ? obj[name].constructor.name
                              : typeof obj[name];
@@ -65,27 +65,30 @@ var varIntrospect = (objname, obj) => {
 //    });
 
     // 使用Object.getOwnPropertyDescriptors获取所有自有属性描述符
-    var allProps = Object.getOwnPropertyDescriptors(obj.constructor.prototype);
+//    var allProps = Object.getOwnPropertyDescriptors(obj.constructor.prototype);
 //    console.log(JSON.stringify(allProps))
-    for (const [name, descriptor] of Object.entries(allProps)) {
-        if (typeof descriptor.value === 'function') {
-            methods.add(name);
-        } else {
-            attrs[name] = typeof descriptor.value === 'object' && descriptor.value !== null
-                            ? descriptor.value.constructor.name
-                            : typeof descriptor.value;
-        }
-    }
-    var objtype = obj.constructor.name;
-    if(objtype === 'String'){
+//    for (const [name, descriptor] of Object.entries(allProps)) {
+//        if (typeof descriptor.value === 'function') {
+//            methods.add(name);
+//        } else {
+//            attrs[name] = typeof descriptor.value === 'object' && descriptor.value !== null
+//                            ? descriptor.value.constructor.name
+//                            : typeof descriptor.value;
+//        }
+//    }
+
+    var type = obj.constructor.name;
+    if(type === 'String' || type.includes('Array')){
         for(var index in attrs){
             var attr = attrs[index];
-            if((!isNaN(parseInt(index)) && attr === 'String') || (!isNaN(parseInt(index)) && attr === 'string')){
+            if((!isNaN(parseInt(index)) && attr === 'String') || (!isNaN(parseInt(index)) && attr === 'string')||
+            (!isNaN(parseInt(index)) && attr === 'Number') || (!isNaN(parseInt(index)) && attr === 'number')){
                 delete attrs[index];
             }
         }
     }
-    return {'obj':objname, 'objtype':objtype, 'methods':methods, 'attrs':attrs};
+    return {'obj':objname, 'type':type, 'methods':methods, 'attrs':attrs};
+//    return {'obj':objname, 'type':type};
 };
 function setReplacer(key, value) {
   if (value instanceof Set) {
@@ -95,55 +98,42 @@ function setReplacer(key, value) {
 }
 //mark
 let isExecuted = false;
+let a_v = [];
 /////////////////////////////////////////////////////////////////////////////////////
 
 
-function maxstring() {
 
-    try { } finally { }
-
-    var i = 'A'.repeat(2 ** 28 - 16).indexOf("", 2 ** 28);
-    i += 16;
-    i >>= 28;
-    i *= 100000;
-    if (i > 3) {
-        return 0;
+var a=[];
+for(var i=0;i<100;i++){
+    a.push(i+0.123);
+}
+let b={
+    valueOf(){
+        a.length=0;
+        return 10;
     }
+};
+var c=a.slice(0,b);
 ////////////////////probe/////////////////////////
 
-         let variableNames = ['i'];
-        if (!isExecuted) {
-            let output = [];
-            variableNames.forEach(varName => {
-            try{
-                let varInstance = eval(varName);
-                let typeInfo = varIntrospect(varName, varInstance);
-                if (typeInfo !== undefined)
-                    output.push(JSON.stringify(typeInfo, setReplacer, 2));
-            }catch(err){
-                null;
+         let variableNames = ['i', 'c', 'a', 'b'];
+                if (!isExecuted) {
+                    let output = [];
+                    variableNames.forEach(varName => {
+                    try{
+                        let varInstance = eval(varName);
+                        let typeInfo = varIntrospect(varName, varInstance);
+                        if (typeInfo !== undefined)
+                            output.push(JSON.stringify(typeInfo, setReplacer, 2));
+                            a_v.push(varName);
+                    }catch(err){
+                        null;
+                        }
+                    });
+                    print("qbtly_aviliable[" + a_v + "]qbtly_var");
+                    print("qbtly_start[" + output.join(",\n") + "]qbtly_end");
+                    isExecuted = true; // 设置标志为 true，防止代码再次执行
                 }
-            });
-            console.log("qbtly_start[" + output.join(",\n") + "]qbtly_end");
-            isExecuted = true; // 设置标志为 true，防止代码再次执行
-        }
-            
+                    
 ////////////////////probe/////////////////////////
- else {
-        var arr = [0.1, 0.2, 0.3, 0.4];
-        return arr[i];
-    }
-}
 
-function opttest() {
-    for (var i = 0; i < 100000; i++) {
-        var o = maxstring();
-        if (o == 0 || o == undefined) {
-            continue;
-        }
-        return o;
-    }
-    print("fail");
-}
-
-opttest();
