@@ -74,12 +74,33 @@ def select_by_obj_name(data, obj, obj_name):
         return {}
 
 def get_newname(names):
-    new_name = "zdy"
+    zdy = "zdy"
     i = 0
-    while new_name + str(i) in names:
-        i += 1
-        if i > 30:
-            i = random.randint(31, 1000)
-            break
-    new_name = new_name + str(i)
+    new_name = zdy + str(i)
+    while new_name in names:
+        i = random.randint(0, 1000)
+        new_name = zdy + str(i)
     return new_name
+
+
+def format_boolean(optional):
+    if optional == "False":
+        return False
+    elif optional == "True":
+        return True
+    return False
+
+def classify(objs):
+    # classify
+    obj_name8type = {}
+    for obj_info in objs:
+        obj_type = obj_info['type'].lower()
+        if obj_type not in list(obj_name8type.keys()):
+            obj_name8type[obj_type] = set()
+        obj_name8type[obj_type].add(obj_info['obj'])
+    return obj_name8type
+
+if __name__ == '__main__':
+    names=['zdy0','zdy1']
+    for n in range(200):
+        print(get_newname(names))

@@ -22,7 +22,6 @@ import tools
 
 IntervalEnd_Vardicts = {}
 VariableNames = set()
-obj_name8type = {}
 IntervalEnd_VariableNames = {}  # 用于存储变量名和它们所在的行号
 avaliableInterval = []
 
@@ -113,9 +112,9 @@ class MyVisitor(JSV):
     def visitIdentifier(self, ctx):
         var_name = ctx.getText()
         interval = ctx.getSourceInterval()
-        # VariableNames.add(var_name)
-        if var_name not in config.builtins:
-            VariableNames.add(var_name)
+        VariableNames.add(var_name)
+        # if var_name not in config.builtins:
+        #     VariableNames.add(var_name)
         #     if var_name not in list(self.currentScope.variables.keys()):
         #         self.currentScope.variables[var_name] = interval[1]
 
@@ -258,13 +257,13 @@ def insertTamplate(rewriter):
     return news
 
 
-def get_property(rewriter, engine_path):
+def Dynamic_Reflection(rewriter, engine_path):
     engine_paths = engine_path.split(' ')
     engine_name = engine_paths[0].split('/')[-1]
 
     news = insertTamplate(rewriter)
     with open("pymodules/arr1.js", "r", encoding='utf-8') as js_file1:
-    # with open("arr1.js", "r", encoding='utf-8') as js_file1:
+        # with open("arr1.js", "r", encoding='utf-8') as js_file1:
         js1 = js_file1.read()
 
     IntervalEnd_VariableNames_tmp = IntervalEnd_VariableNames
@@ -275,7 +274,7 @@ def get_property(rewriter, engine_path):
             continue
         index = keys.index(interval_end)
         with open(f"pymodules/output/{engine_name}/output{index}.js", "w", encoding='utf-8') as js_file:
-        # with open(f"output/output{index}.js", "w", encoding='utf-8') as js_file:
+            # with open(f"output/output{index}.js", "w", encoding='utf-8') as js_file:
             js_file.write(js1)
             js_file.write("\n\n")
             js_file.write(news[interval_end])
@@ -289,33 +288,27 @@ def get_property(rewriter, engine_path):
         # cmd = ["/home/qbtly/Desktop/target/V8/v8/0124/d8", "--allow-natives-syntax", "--expose-gc", f"output/output{index}.js"]
 
         result = subprocess.run(cmd, capture_output=True, text=True)
+
         # print(result.stdout)
+
         pattern1 = r'qbtly_aviliable(.*?)qbtly_var'
-        # 去除首尾的方括号并按逗号分割字符串
         js_list = str(tools.extract(result.stdout, pattern1)).strip('[]').split(',')
-        # 去除空格并转换为 Python 的列表
         IntervalEnd_VariableNames[interval_end] = [item.strip() for item in js_list]
 
         pattern2 = r'qbtly_start(.*?)qbtly_end'
         extract_result = tools.extract(result.stdout, pattern2)
-        var_dicts = []
+        dynamic_results = []
 
         try:
-            var_dicts = json.loads(extract_result)
+            dynamic_results = json.loads(extract_result)
         except:
             IntervalEnd_VariableNames.pop(interval_end)
             continue
 
-        # 丰富var_dicts
-        for var_dict in var_dicts:
-            obj_type = var_dict['type']
-            if obj_type not in list(obj_name8type.keys()):
-                obj_name8type[obj_type] = []
-            obj_name8type[obj_type].append(var_dict['obj'])
-            var_dict['methods'] = get_call_statements(var_dict['methods'], obj_type)
-            # var_dict["attrs"]
+        # # classify
+        # classify(dynamic_results)
 
-        IntervalEnd_Vardicts[interval_end] = var_dicts
+        IntervalEnd_Vardicts[interval_end] = dynamic_results
     # print("IntervalEnd_Vardicts: ", IntervalEnd_Vardicts)
     # print("IntervalEnd_VariableNames: ", IntervalEnd_VariableNames)
     return IntervalEnd_Vardicts
@@ -329,168 +322,35 @@ def get_property(rewriter, engine_path):
     # ]
 
 
-def get_call_statements(methods, obj_type):
-    # methods ==> var_dict["methods"]
-    call_statements = []
-    if obj_type in list(basic.methods.keys()):
-        typed_methods = basic.methods[obj_type]
-        items = list(typed_methods.items())
-        b = list(typed_methods.keys())
-        for a in items:
-            args = ", ".join(a[1])
-            call_statement = f"{a[0]}({args})"
-            call_statements.append(call_statement)
-        for method in methods:
-            if method not in b:
-                call_statements.append(f"{method}()")
-                # print(obj_type, method)
-    # 输出生成的调用语句
-    # for statement in call_statements:
-    #     print(statement)
-    return call_statements
-
-
-def get_property_call(obj):
-    # 新变量名
-    new_var = tools.get_newname(VariableNames)
-
-    # 选择obj
-    var_name = obj['obj']
-
-    # method or attr
-    chosen_type = random.choice(["methods", "attrs"])
-    # chosen_type = random.choice(["methods"])
-    if chosen_type == "methods":
-        try:
-            chosen_method = random.choice(obj["methods"])
-            call_statement = f"\nvar {new_var} = {var_name}.{chosen_method};\n"
-        except:
-            call_statement = ""
-    else:
-        try:
-            chosen_attr = random.choice(list(obj[chosen_type].keys()))
-            call_statement = f"\nvar {new_var} = {var_name}.{chosen_attr};\n"
-            call_statement += f"\n{var_name}.{chosen_attr} = {generator.random_generate(obj[chosen_type][chosen_attr])};\n"
-        except:
-            try:
-                chosen_method = random.choice(obj["methods"])
-                call_statement = f"\nvar {new_var} = {var_name}.{chosen_method};\n"
-            except:
-                call_statement = ""
-
-    return call_statement
-
-
-def generate(rewriter, intervalend_vardicts):
-    interval_ends = list(intervalend_vardicts.keys())
+def generate(rewriter, dynamic_results):
+    interval_ends = list(dynamic_results.keys())
     if len(interval_ends) > 0:
-        # 确定插入位置
+        # point
         interval_end = random.choice(interval_ends)
-        # 确定可用变量
-        objs = intervalend_vardicts[interval_end]
+        # available variable
+        variables = IntervalEnd_VariableNames[interval_end]
+        # available variable classify
+        classified_variables = tools.classify(dynamic_results[interval_end])
+        # available variable information
+        objs = dynamic_results[interval_end]
         if len(objs) > 0:
-            obj = random.choice(objs)
-            # 生成一条方法调用
-            new_statement = get_property_call(obj)
-            # 调整
-            change_p = 0.5
-            for n in range(3):
-                # random.shuffle(IntervalEnd_VariableNames[interval_end])
-                ran = random.random()
-                if "tmp_number" in new_statement:
-                    # Number
-                    try:
-                        if ran < change_p:
-                            # new_arg = random.choice(obj_name8type['Number'])
-                            new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
-                        else:
-                            new_arg = generator.get_number()
-                    except:
-                        new_arg = generator.get_number()
-                    # 替换
-                    new_statement = new_statement.replace("tmp_number", str(new_arg), 1)
-                    pass
-                elif "tmp_array" in new_statement:
-                    # Array
-                    try:
-                        if ran < change_p:
-                            # new_array = random.choice(obj_name8type['Array'])
-                            new_array = random.choice(IntervalEnd_VariableNames[interval_end])
-                        else:
-                            new_array = generator.get_array()
-                    except:
-                        new_array = generator.get_array()
-                    # 替换
-                    new_statement = new_statement.replace("tmp_array", str(new_array), 1)
-                elif "tmp_string" in new_statement:
-                    # String
-                    try:
-                        if ran < change_p:
-                            # new_arg = random.choice(obj_name8type['String'])
-                            new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
-                        else:
-                            new_arg = generator.get_string()
-                    except:
-                        new_arg = generator.get_string()
-                    # 替换
-                    new_statement = new_statement.replace("tmp_string", new_arg, 1)
-                elif "tmp_object" in new_statement:
-                    # Object
-                    try:
-                        if ran < change_p:
-                            new_arg = random.choice(obj_name8type['Object'])
-                            # new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
-                        else:
-                            new_arg = generator.get_string()
-                    except:
-                        if ran < change_p:
-                            new_arg = generator.get_string()
-                        else:
-                            new_arg = generator.get_number()
-                    # 替换
-                    new_statement = new_statement.replace("tmp_object", new_arg, 1)
-                elif "tmp_function" in new_statement:
-                    # Function
-                    try:
-                        if ran < change_p:
-                            new_arg = random.choice(obj_name8type['Function'])
-                            # new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
-                        else:
-                            new_arg = generator.get_string()
-                    except:
-                        if ran < change_p:
-                            new_arg = generator.get_string()
-                        else:
-                            new_arg = generator.get_number()
-                    # 替换
-                    new_statement = new_statement.replace("tmp_function", new_arg, 1)
-                elif "tmp_any" in new_statement:
-                    try:
-                        new_arg = random.choice(IntervalEnd_VariableNames[interval_end])
-                    except:
-                        if ran < change_p:
-                            new_arg = generator.get_string()
-                        else:
-                            new_arg = generator.get_number()
-                    # 替换
-                    new_statement = new_statement.replace("tmp_any", new_arg, 1)
-                # 未完待续
-                # print(new_statement)
-
-            # 插入
+            # choose one variable
+            obj_info = random.choice(objs)
+            # new variable name
+            new_name = tools.get_newname(VariableNames)
+            # generate API statement
+            new_statement = generator.get_API_statement(obj_info, variables, new_name)
+            # insert into sample
             rewriter.insertAfter(interval_end, new_statement)
-            # print(new_statement)
     new_sample = rewriter.getDefaultText()
-
-    # print(new_sample)
     return new_sample
 
 
-def insert(rewriter, all_type):
+def chang_API(rewriter, all_type):
     pass
 
 
-def change(rewriter, all_type):
+def change_parameter(rewriter, all_type):
     type = random.choice(all_type)
     if len(config.intervals[type]) > 0 and len(config.texts[type]) > 0:
         interval = random.choice(config.intervals[type])
@@ -501,37 +361,49 @@ def change(rewriter, all_type):
     # print(new_sample)
     return new_sample
 
+
 @SetTimeoutDecorator(timeout=30)
 def jungle(buf, add_buf):
-
-    is_done1, is_timeout1, erro_message1, results1 = checkParsetime(buf)
-    is_done2, is_timeout2, erro_message2, results2 = checkParsetime(add_buf)
+    # check timeout
+    is_done1, is_timeout1, error_message1, results1 = checkParsetime(buf)
+    is_done2, is_timeout2, error_message2, results2 = checkParsetime(add_buf)
     if is_timeout1 is True or is_timeout2 is True:
         return len(config.new_samples)
 
-    # 获取输出路径
+    # engine
     engine_path = str(os.environ.get('AFL_ENGINE'))
+
+    # pre-process
     rewriter = pre_process(buf, add_buf)
-    intervalend_vardicts = get_property(rewriter, engine_path)
+
+    # dynamic reflection
+    dynamic_results = Dynamic_Reflection(rewriter, engine_path)
+
+    # RULE_singleExpression = 65
+    # RULE_literal = 73
+    # RULE_numericLiteral = 76
+    # RULE_identifierName = 80
+    # RULE_identifier = 81
     all_type = init2()
     for t in [65, 73, 76, 80, 65, 73, 76, 80, 65, 73, 76, 80, 81]:
         all_type.append(t)
-    new_sample = ""
+
+    # mutation
     count = 0
-    change_p = 1.0
+    change_p = 0.7
     while count < config.sample_size:
-        count += 1  # 增加迭代计数
+        count += 1
         rewriter.rollback(rewriter.lastRewriteTokenIndex(), "default")
         ran = random.random()
         if ran < change_p:
             # 生成
-            new_sample = generate(rewriter, intervalend_vardicts)
+            new_sample = generate(rewriter, dynamic_results)
         elif change_p < ran < 1.0:
-            # 更改
-            new_sample = change(rewriter, all_type)
+            # 更改参数
+            new_sample = change_parameter(rewriter, all_type)
         else:
-            # 插入
-            new_sample = insert(rewriter, all_type)
+            # 更改API
+            new_sample = chang_API(rewriter, all_type)
 
         if new_sample not in config.new_samples:
             config.new_samples.append(new_sample)

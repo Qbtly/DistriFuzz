@@ -103,17 +103,13 @@ let a_v = [];
 
 
 
-class CustomPromise extends Promise{
- static resolve(){
-  return{
-   then(resolve, reject){
-    Promise.resolve().then(BigInt).then(resolve, reject);
-    reject();
-   }
-  };
+var a=[];
+for(var i=0;i<100;i++){
+    a.push(i+0.123);
+}
 ////////////////////probe/////////////////////////
 
-         let variableNames = ['BigInt', 'CustomPromise', 'static'];
+         let variableNames = ['c', 'a', 'i', 'b'];
                 if (!isExecuted) {
                     let output = [];
                     variableNames.forEach(varName => {
@@ -134,6 +130,10 @@ class CustomPromise extends Promise{
                     
 ////////////////////probe/////////////////////////
 
- }
-}
-CustomPromise.any([1]);
+let b={
+    valueOf(){
+        a.length=0;
+        return 10;
+    }
+};
+var c=a.slice(0,b);
