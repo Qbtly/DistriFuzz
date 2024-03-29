@@ -187,20 +187,33 @@ def get_function(p, variables, value_range, special_values, depth):
 
         return function_value
 
+def get_function2(p, variables):
+    param_name = tools.get_newname(variables)
+    function_name = f'function_{param_name}'
+    function_body = """
+            var zdy_a = new Array(5);
+            zdy_b = {};
+        """
+    function_value = f'function {function_name}(zdy_b) {{ {function_body} }}'
+
+    return function_value
 
 def get_random_value(type1, depth=3):
     result = 0
     if depth <= 0:
         return result  # 达到深度限制，返回空
     type1 = str(type1).lower()
+    if type1 == 'any':
+        type1 = random.choice(types)
+
     p = random.random()
-    if type1.lower() == 'string':
+    if type1 == 'string':
         result = get_string2(p)
-    elif type1.lower() == 'array':
+    elif type1 == 'array':
         result = get_array2(p, depth=depth - 1)
-    elif type1.lower() == 'number':
+    elif type1 == 'number':
         result = get_number2(p)
-    elif type1.lower() == 'object':
+    elif type1 == 'object':
         result = get_object2(p, depth=depth - 1)
     return result
 
@@ -285,7 +298,7 @@ def get_API_statement(obj_info, variables, new_name):
                 call_statement = f"\nlet {new_name} = {var_name}.{method_call};\n"
             except:
                 call_statement = ""
-
+    print(call_statement)
     return call_statement
 
 if __name__ == '__main__':

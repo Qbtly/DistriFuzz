@@ -20,7 +20,7 @@ from tools import set_timeout
 engine = "/home/qbtly/Desktop/target/V8/v8/0124/d8"
 IntervalEnd_Vardicts = {}
 VariableNames = set()
-IntervalEnd_VariableNames = {}  # 用于存储变量名和它们所在的行号
+IntervalEnd_VariableNames = {}
 avaliableInterval = []
 
 
@@ -115,13 +115,14 @@ class MyVisitor(JSV):
             VariableNames.add(var_name)
         #     if var_name not in list(self.currentScope.variables.keys()):
         #         self.currentScope.variables[var_name] = interval[1]
+        super().visitStatement(ctx)
 
     def visitStatement(self, ctx):
         interval = ctx.getSourceInterval()
         super().visitStatement(ctx)
         if interval[1] not in avaliableInterval:
             avaliableInterval.append(interval[1])
-            IntervalEnd_VariableNames[interval[1]] = self.getVariablesAtIntervalEnd(interval)
+            IntervalEnd_VariableNames[interval[1]] = []
         self.enterScope()
         super().visitBlock(ctx)
         self.exitScope()
@@ -190,8 +191,6 @@ def Parse_ast(js_code):
     except RecursionError:
         return
     rewriter = TokenStreamRewriter(tokens=stream)
-    for k in list(IntervalEnd_VariableNames.keys()):
-        IntervalEnd_VariableNames[k] = list(VariableNames)
     print("IntervalEnd_VariableNames: ", IntervalEnd_VariableNames)
     return rewriter
 
@@ -202,83 +201,66 @@ def pre_process(js_code):
     return rewriter
 
 
-def insertTamplate(rewriter):
-    news = {}
-    for interval_end in list(IntervalEnd_VariableNames.keys()):
-        js_var = str(IntervalEnd_VariableNames[interval_end])
+def insertTamplate(rewriter, interval_ends):
+    for interval_end in interval_ends:
         head = "\n////////////////////probe/////////////////////////\n"
-        js_id = "\n         let variableNames = " + str(js_var) + ";"  # 被调用过的
-        get_type = r'''
-                if (!isExecuted) {
-                    let output = [];
-                    variableNames.forEach(varName => {
-                    try{
-                        let varInstance = eval(varName);
-                        let typeInfo = varIntrospect(varName, varInstance);
-                        if (typeInfo !== undefined)
-                            output.push(JSON.stringify(typeInfo, setReplacer, 2));
-                            a_v.push(varName);
-                    }catch(err){
-                        null;
-                        }
-                    });
-                    print("qbtly_aviliable[" + a_v + "]qbtly_var");
-                    print("qbtly_start[" + output.join(",\n") + "]qbtly_end");
-                    isExecuted = true; // 设置标志为 true，防止代码再次执行
-                }
-                    '''
-        tmp = head + js_id + get_type + head
+        # point = "\n   let point = " + str(interval_end) + ";\n"
+        dr = f"   probe(variableNames,{interval_end});\n"
+        tmp = head + dr + head
         # 插入
         rewriter.insertAfter(interval_end, tmp)
-        new = rewriter.getDefaultText()
-        news[interval_end] = new
+    probed_sample = rewriter.getDefaultText()
+    for interval_end in interval_ends:
         rewriter.rollback(rewriter.lastRewriteTokenIndex(), "default")
-    return news
-
-
-
+    return probed_sample
 
 
 def Dynamic_Reflection(rewriter, engine_path):
-    news = insertTamplate(rewriter)
+    interval_ends = list(IntervalEnd_VariableNames.keys())
+    probed_sample = insertTamplate(rewriter, interval_ends)
     # print(news)
     with open("arr1.js", "r") as js_file1:
         js1 = js_file1.read()
 
-    IntervalEnd_VariableNames_tmp = IntervalEnd_VariableNames
-    keys = list(IntervalEnd_VariableNames_tmp.keys())
-    for interval_end in keys:
-        if len(IntervalEnd_VariableNames_tmp[interval_end]) <= 0:
-            continue
-        index = keys.index(interval_end)
-        with open(f"output/output{index}.js", "w") as js_file:
-            js_file.write(js1)
-            js_file.write("\n\n")
-            js_file.write(news[interval_end])
-            # 执行 JavaScript 文件
+    avaliableVar = "\n   let variableNames = " + str(list(VariableNames)) + ";\n"
+    with open(f"output/output.js", "w") as js_file:
+        js_file.write(js1)
+        js_file.write("\n\n")
+        js_file.write(avaliableVar)
+        js_file.write(probed_sample)
+    # exit()
+    # 执行 JavaScript 文件
+    # cmd = [engine, "--allow-natives-syntax", "--expose-gc", f"output/output{index}.js"]
+    cmd = [engine_path, f"output/output.js"]
 
-        # cmd = [engine, "--allow-natives-syntax", "--expose-gc", f"output/output{index}.js"]
-        cmd = [engine_path, f"output/output{index}.js"]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        # print(result.stdout)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    # print(result.stdout)
+
+    pattern0 = r'qbtly_start&(.*?)&qbtly_end'
+    outputs = tools.extract(result.stdout, pattern0)
+    # print(outputs)
+    extract_result = []
+    for output in outputs:
+        # print(output)
+        pattern2 = r'qbtly_point_start(.*?)qbtly_point_end'
+        interval_end = int(tools.extract0(output, pattern2, 0))
+
         pattern1 = r'qbtly_aviliable(.*?)qbtly_var'
-        # 去除首尾的方括号并按逗号分割字符串
-        js_list = str(tools.extract(result.stdout, pattern1)).strip('[]').split(',')
-        # 去除空格并转换为 Python 的列表
+        js_list = str(tools.extract0(output, pattern1, [])).strip('[]').split(',')
         IntervalEnd_VariableNames[interval_end] = [item.strip() for item in js_list]
 
-        pattern2 = r'qbtly_start(.*?)qbtly_end'
-        extract_result = tools.extract(result.stdout, pattern2)
+        pattern3 = r'qbtly_dicts_start(.*?)qbtly_dicts_end'
+        extract_result = tools.extract0(output, pattern3, [])
+
         dynamic_results = []
 
         try:
             dynamic_results = json.loads(extract_result)
         except:
+            print("失败")
+            print(interval_end)
             IntervalEnd_VariableNames.pop(interval_end)
             continue
-
-        # # classify
-        # classify(dynamic_results)
 
         IntervalEnd_Vardicts[interval_end] = dynamic_results
 
@@ -293,9 +275,6 @@ def Dynamic_Reflection(rewriter, engine_path):
     #     "attrs": {"length": "number"}
     #     },
     # ]
-
-
-
 
 
 # def get_call_statements(methods, obj_type):

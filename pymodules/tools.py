@@ -45,10 +45,16 @@ def set_timeout(num, callback):
 def extract(text, pattern):
     matches = re.findall(pattern, text, re.DOTALL)
     if matches:
+        return matches
+    else:
+        return ''
+
+def extract0(text, pattern, default):
+    matches = re.findall(pattern, text, re.DOTALL)
+    if matches:
         return matches[0]
     else:
-        return []
-
+        return default
 
 def del_file(path_data):
     for i in os.listdir(path_data):  # os.listdir(path_data)#返回一个列表，里面是当前目录下面的所有东西的相对路径

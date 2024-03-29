@@ -53,3 +53,21 @@ var varIntrospect = (objname, obj) => {
 };
 
 
+////    console.log(3)
+//    // 获取对象的构造函数的属性和方法
+//    Object.getOwnPropertyNames(obj.constructor).forEach((name) => {
+////        console.log(name)
+////        console.log(obj.constructor.hasOwnProperty(name))
+//        try{
+//            if (typeof obj.constructor[name] === 'function') {
+//                methods.add(name);
+//            }
+//            else if (obj.constructor.hasOwnProperty(name)) {
+//                attrs[name] = typeof obj.constructor[name] === 'object' && obj.constructor[name] !== null
+//                             ? obj.constructor[name].constructor.name
+//                             : typeof obj.constructor[name];
+//            }
+//        }catch(err){
+//            null;
+//        }
+//    });

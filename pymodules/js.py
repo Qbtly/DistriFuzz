@@ -1,21 +1,9 @@
 js_code3 = '''
-function main() {
-    const v1 = [2020, 2020];
-    function v3(v4, v5, v6, v7) {
-        for (const obj18 = obj16++; v11 < 7; v11++) {
-            for (let v16 = 0; v16 != 100; v16++) {
-            }
-            for (let v18 = -0.0; v18 < 7; v18 = v18 || 13.37) {
-                const v21 = Math.max(-339, v18);
-                const v22 = v1.fill();
-                const v23 = v7 % v21;
-            }
-        }
-    }
-    const v24 = v3();
-}
+var a;
 
-main();
+(a) = 1;
+
+print(a === 1);
 
 '''
 js_code = '''
@@ -61,20 +49,91 @@ class CustomPromise extends Promise{
 }
 CustomPromise.any([1]);
 '''
-get_type = r'''
-        if (!isExecuted) {
-            let output = [];
-            variableNames.forEach(varName => {
-            try{
-                let varInstance = eval(varName);
-                let typeInfo = varIntrospect(varName, varInstance);
-                if (typeInfo !== undefined)
-                    output.push(JSON.stringify(typeInfo, setReplacer, 2));
-            }catch(err){
-                null;
-                }
-            });
-            print("qbtly_start[" + output.join(",\n") + "]qbtly_end");
-            isExecuted = true; // 设置标志为 true，防止代码再次执行
+
+arr1 = r'''
+var DynamicReflection = (objname, obj) => {
+    var attrs = {};
+    var methods = new Set();
+    if(obj === undefined || obj === null){
+        return;
+    }
+    var enumerableProperties = Array.isArray(obj) ? Object.keys(obj) : null;
+    Object.getOwnPropertyNames(Object.getPrototypeOf(obj)).forEach((name) => {
+        try{
+            if (typeof obj[name] === 'function') {
+                methods.add(name);
+            }
+            else if (Object.getPrototypeOf(obj).hasOwnProperty(name)) {
+                attrs[name] = typeof obj[name] === 'object' && obj[name] !== null
+                             ? obj[name].constructor.name
+                             : typeof obj[name];
+            }
+        }catch(err){
+            null;
         }
+    });
+    Object.getOwnPropertyNames(obj).forEach((name) => {
+        try{
+            if (enumerableProperties !== null && enumerableProperties.indexOf(name) !== -1) {
+                return;
+            }
+            if (typeof obj[name] === 'function') {
+                methods.add(name);
+            }
+            else if (obj.hasOwnProperty(name)) {
+                attrs[name] = typeof obj[name] === 'object' && obj[name] !== null
+                             ? obj[name].constructor.name
+                             : typeof obj[name];
+            }
+        }catch(err){
+            null;
+        }
+    });
+    var type = obj.constructor.name;
+    if(type === 'String' || type.includes('Array')){
+        for(var index in attrs){
+            var attr = attrs[index];
+            if((!isNaN(parseInt(index)) && attr === 'String') || (!isNaN(parseInt(index)) && attr === 'string')||
+            (!isNaN(parseInt(index)) && attr === 'Number') || (!isNaN(parseInt(index)) && attr === 'number')){
+                delete attrs[index];
+            }
+        }
+    }
+    return {'obj':objname, 'type':type, 'methods':methods, 'attrs':attrs};
+};
+function setReplacer(key, value) {
+  if (value instanceof Set) {
+    return [...value];
+  }
+  return value;
+}
+/////////////////////////////////////////////////////////////////////////////////////
+'''
+arr2 = r'''
+let mark = 0;
+function probe(variableNames ,point){
+    let isExecuted = mark === point;
+    if (!isExecuted) {
+        let output = [];
+        let a_v = [];
+        variableNames.forEach(varName => {
+        try{
+            let varInstance = eval(varName);
+            let typeInfo = DynamicReflection(varName, varInstance);
+            if (typeInfo !== undefined)
+                output.push(JSON.stringify(typeInfo, setReplacer, 2));
+                a_v.push(varName);
+        }catch(err){
+            null;
+            }
+        });
+        print("qbtly_start&")
+        print("qbtly_aviliable[" + a_v + "]qbtly_var");
+        print("qbtly_point_start" + point + "qbtly_point_end")
+        print("qbtly_dicts_start[" + output.join(",\n") + "]qbtly_dicts_end");
+        print("&qbtly_end")
+        mark = point;
+                }
+}
+/////////////////////////////////////////////////////////////////////////////////////
             '''

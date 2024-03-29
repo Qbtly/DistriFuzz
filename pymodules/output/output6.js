@@ -1,4 +1,4 @@
-var varIntrospect = (objname, obj) => {
+var DynamicReflection = (objname, obj) => {
     var attrs = {};
     var methods = new Set();
 
@@ -64,18 +64,6 @@ var varIntrospect = (objname, obj) => {
 //        }
 //    });
 
-    // 使用Object.getOwnPropertyDescriptors获取所有自有属性描述符
-//    var allProps = Object.getOwnPropertyDescriptors(obj.constructor.prototype);
-//    console.log(JSON.stringify(allProps))
-//    for (const [name, descriptor] of Object.entries(allProps)) {
-//        if (typeof descriptor.value === 'function') {
-//            methods.add(name);
-//        } else {
-//            attrs[name] = typeof descriptor.value === 'object' && descriptor.value !== null
-//                            ? descriptor.value.constructor.name
-//                            : typeof descriptor.value;
-//        }
-//    }
 
     var type = obj.constructor.name;
     if(type === 'String' || type.includes('Array')){
@@ -99,7 +87,28 @@ function setReplacer(key, value) {
 //mark
 let isExecuted = false;
 let a_v = [];
+
+function probe(variableNames){
+    if (!isExecuted) {
+        let output = [];
+        variableNames.forEach(varName => {
+        try{
+            let varInstance = eval(varName);
+            let typeInfo = DynamicReflection(varName, varInstance);
+            if (typeInfo !== undefined)
+                output.push(JSON.stringify(typeInfo, setReplacer, 2));
+                a_v.push(varName);
+        }catch(err){
+            null;
+            }
+        });
+        print("qbtly_aviliable[" + a_v + "]qbtly_var");
+        print("qbtly_start[" + output.join(",\n") + "]qbtly_end");
+        isExecuted = true; // 设置标志为 true，防止代码再次执行
+                }
+}
 /////////////////////////////////////////////////////////////////////////////////////
+
 
 
 
@@ -116,24 +125,8 @@ let b={
 var c=a.slice(0,b);
 ////////////////////probe/////////////////////////
 
-         let variableNames = ['c', 'a', 'i', 'b'];
-                if (!isExecuted) {
-                    let output = [];
-                    variableNames.forEach(varName => {
-                    try{
-                        let varInstance = eval(varName);
-                        let typeInfo = varIntrospect(varName, varInstance);
-                        if (typeInfo !== undefined)
-                            output.push(JSON.stringify(typeInfo, setReplacer, 2));
-                            a_v.push(varName);
-                    }catch(err){
-                        null;
-                        }
-                    });
-                    print("qbtly_aviliable[" + a_v + "]qbtly_var");
-                    print("qbtly_start[" + output.join(",\n") + "]qbtly_end");
-                    isExecuted = true; // 设置标志为 true，防止代码再次执行
-                }
-                    
+   let variableNames = ['b', 'i', 'a', 'c'];
+   probe(variableNames);
+
 ////////////////////probe/////////////////////////
 
