@@ -64,7 +64,7 @@ class MyVisitor(JSV):
         super().visitStatement(ctx)
 
 
-def init():
+def init1():
     IntervalEnd_Vardicts = {}
     VariableNames = set()
     obj_name8type = {}
@@ -137,7 +137,7 @@ def Parse_ast2(add_buf):
 
 
 def pre_process(buf, add_buf):
-    init()
+    init1()
     rewriter = Parse_ast1(buf)
     Parse_ast2(add_buf)
     return rewriter
@@ -146,8 +146,8 @@ def pre_process(buf, add_buf):
 def insertTamplate(rewriter, interval_ends):
     for interval_end in interval_ends:
         head = "\n////////////////////probe/////////////////////////\n"
-        dr = f"   probe(variableNames,{interval_end});\n"
-        tmp = head + dr + head
+        dr = f"   ;probe(variableNames,{interval_end});\n"
+        # tmp = head + dr + head
         tmp = dr
         # 插入
         rewriter.insertAfter(interval_end, tmp)
@@ -172,24 +172,37 @@ def Dynamic_Reflection(rewriter, engine_path):
 
     avaliableVar = "\n   let variableNames = " + str(list(VariableNames)) + ";\n"
 
-    with open(f"pymodules/output/{engine_name}/output.js", "w") as js_file:
-        js_file.write(js0)
-        js_file.write(js2)
-        js_file.write("\n\n")
-        js_file.write(avaliableVar)
-        js_file.write(probed_sample)
-        js_file.close()
+    # with open(f"output/{engine_name}/output.js", "w") as js_file:
+    try:
+        with open(f"custom_mutators/examples/output/{engine_name}/output.js", "w") as js_file:
+            js_file.write(js0)
+            js_file.write(js2)
+            js_file.write("\n\n")
+            js_file.write(avaliableVar)
+            js_file.write(probed_sample)
+    except Exception as e:
+        print(f"Error occurred: {e}")
 
     # 执行 JavaScript Samples
     cmd = []
     for item in engine_paths:
-        cmd.append(item)
-    cmd.append(f"pymodules/output/{engine_name}/output.js")
+        if item:
+            cmd.append(item)
+    cmd.append(f"custom_mutators/examples/output/{engine_name}/output.js")
+    # cmd.append(f"output/{engine_name}/output.js")
 
     # cmd = ["/home/qbtly/Desktop/target/V8/v8/0124/d8", "--allow-natives-syntax", "--expose-gc", f"output/output{index}.js"]
 
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-    # print(result.stdout)
+    # print(cmd, result.stdout)
+
+    # 检查命令是否执行成功
+    if result.returncode == 0:
+        print("Command executed successfully.")
+        # print("Output:", result.stdout)
+    else:
+        print("Command failed with return code", result.returncode)
+        print("Error output:", result.stderr)
 
     pattern0 = r'qbtly_start&(.*?)&qbtly_end'
     outputs = tools.extract(result.stdout, pattern0)
@@ -223,7 +236,7 @@ def Dynamic_Reflection(rewriter, engine_path):
             # var_dict["attrs"]
         IntervalEnd_Vardicts[interval_end] = dynamic_results
 
-    # print("IntervalEnd_Vardicts: ", IntervalEnd_Vardicts)
+    # print("IntervalEnd_Vardicts: ", IntervalEnd_Vardicts, VariableNames)
     # print("IntervalEnd_VariableNames: ", IntervalEnd_VariableNames)
     return IntervalEnd_Vardicts
 
@@ -262,22 +275,23 @@ def get_property_call(obj):
     if chosen_type == "methods":
         try:
             chosen_method = random.choice(obj["methods"])
-            call_statement = f"\nvar {new_var} = {var_name}.{chosen_method};\n"
+            call_statement = f"\nlet {new_var} = {var_name}.{chosen_method};\n"
         except:
             call_statement = ""
     else:
         try:
             chosen_attr = random.choice(list(obj[chosen_type].keys()))
-            call_statement = f"\nvar {new_var} = {var_name}.{chosen_attr};\n"
+            call_statement = f"\nlet {new_var} = {var_name}.{chosen_attr};\n"
             call_statement += f"\n{var_name}.{chosen_attr} = {generator.get_random_value(obj[chosen_type][chosen_attr])};\n"
         except:
             try:
                 chosen_method = random.choice(obj["methods"])
-                call_statement = f"\nvar {new_var} = {var_name}.{chosen_method};\n"
+                call_statement = f"\nlet {new_var} = {var_name}.{chosen_method};\n"
             except:
                 call_statement = ""
 
     return call_statement
+
 
 def generate(rewriter, intervalend_vardicts):
     interval_ends = list(intervalend_vardicts.keys())
@@ -398,9 +412,11 @@ def jungle(buf, add_buf):
 
     # 获取输出路径
     engine_path = str(os.environ.get('AFL_ENGINE'))
-    # engine_path = "/jerryscript/0321nothing/bin/jerry"
+    # print(engine_path)
+    # engine_path = "/jsc/fuzz/JSCOnly/Release/bin/jsc"
+    # engine_path = "/gecko-dev/js/src/0402/dist/bin/js"
+    # engine_path = "/home/qbtly/Desktop/target/jerryscript/reeee/bin/jerry"
     rewriter = pre_process(buf, add_buf)
-
     intervalend_vardicts = Dynamic_Reflection(rewriter, engine_path)
     # print('=======================')
     all_type = init2()
@@ -409,10 +425,14 @@ def jungle(buf, add_buf):
     new_sample = ""
     count = 0
     change_p = 0.8
+    ran = 0
     while count < config.sample_size:
         count += 1  # 增加迭代计数
         rewriter.rollback(rewriter.lastRewriteTokenIndex(), "default")
-        ran = random.random()
+
+        if count > 1000:
+            ran = random.random()
+
         if ran < change_p:
             # 生成
             new_sample = generate(rewriter, intervalend_vardicts)
@@ -430,6 +450,20 @@ def jungle(buf, add_buf):
     return len(config.new_samples)
 
 
+def init(seed):
+    """
+    Called once when AFLFuzz starts up. Used to seed our RNG.
+
+    @type seed: int
+    @param seed: A 32-bit random value
+    """
+    random.seed(seed)
+
+
+def deinit():
+    pass
+
+
 def fuzz():
     if len(config.new_samples) > 0:
         sample = config.new_samples.pop(0)
@@ -438,7 +472,7 @@ def fuzz():
     return bytearray(sample.encode())
 
 
-def parse(buf, add_buf):
+def fuzz_count(buf, add_buf):
     jungle(buf, add_buf)
     return len(config.new_samples)
 
@@ -447,12 +481,12 @@ if __name__ == '__main__':
     # 示例 JavaScript 代码
     js_code = js.js_code4
     js_code2 = js.js_code2
-    length = parse(js_code.encode(), js_code.encode())
+    length = fuzz_count(js_code.encode(), js_code.encode())
     print("Total Samples: ", length)
-    if length > 0:
-        for i in range(0, length):
-            with open("/home/qbtly/Desktop/aaaaa/b/" + str(i) + ".js", "w") as f:
-                f.write(fuzz().decode())
-                f.close()
-            # print(fuzz().decode())
-    print("/home/qbtly/Desktop/aaaaa/b")
+    # if length > 0:
+    #     for i in range(0, length):
+    #         with open("/home/qbtly/Desktop/aaaaa/b/" + str(i) + ".js", "w") as f:
+    #             f.write(fuzz().decode())
+    #             f.close()
+    #         # print(fuzz().decode())
+    # print("/home/qbtly/Desktop/aaaaa/b")
