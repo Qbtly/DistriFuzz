@@ -1,17 +1,11 @@
 var DynamicReflection = (objname, obj) => {
     var attrs = {};
     var methods = new Set();
-
     if(obj === undefined || obj === null){
         return;
     }
     var enumerableProperties = Array.isArray(obj) ? Object.keys(obj) : null;
-//    var enumerableProperties = Array.isArray(obj) ? Object.getOwnPropertyDescriptor(obj) : null;
-//    console.log(enumerableProperties)
-    // 获取对象原型链上的属性和方法
-//    console.log(1)
     Object.getOwnPropertyNames(Object.getPrototypeOf(obj)).forEach((name) => {
-//    console.log(name)
         try{
             if (typeof obj[name] === 'function') {
                 methods.add(name);
@@ -25,10 +19,7 @@ var DynamicReflection = (objname, obj) => {
             null;
         }
     });
-    // 获取对象自身的属性和方法
-//    console.log(2)
     Object.getOwnPropertyNames(obj).forEach((name) => {
-//    console.log(name)
         try{
             if (enumerableProperties !== null && enumerableProperties.indexOf(name) !== -1) {
                 return;
@@ -45,26 +36,6 @@ var DynamicReflection = (objname, obj) => {
             null;
         }
     });
-////    console.log(3)
-//    // 获取对象的构造函数的属性和方法
-//    Object.getOwnPropertyNames(obj.constructor).forEach((name) => {
-////        console.log(name)
-////        console.log(obj.constructor.hasOwnProperty(name))
-//        try{
-//            if (typeof obj.constructor[name] === 'function') {
-//                methods.add(name);
-//            }
-//            else if (obj.constructor.hasOwnProperty(name)) {
-//                attrs[name] = typeof obj.constructor[name] === 'object' && obj.constructor[name] !== null
-//                             ? obj.constructor[name].constructor.name
-//                             : typeof obj.constructor[name];
-//            }
-//        }catch(err){
-//            null;
-//        }
-//    });
-
-
     var type = obj.constructor.name;
     if(type === 'String' || type.includes('Array')){
         for(var index in attrs){
@@ -76,7 +47,6 @@ var DynamicReflection = (objname, obj) => {
         }
     }
     return {'obj':objname, 'type':type, 'methods':methods, 'attrs':attrs};
-//    return {'obj':objname, 'type':type};
 };
 function setReplacer(key, value) {
   if (value instanceof Set) {
@@ -84,11 +54,12 @@ function setReplacer(key, value) {
   }
   return value;
 }
+/////////////////////////////////////////////////////////////////////////////////////
 
-let mark = 0;
-
+let points = new Set()
 function probe(variableNames ,point){
-    let isExecuted = mark === point;
+
+    let isExecuted = points.has(point);
     if (!isExecuted) {
         let output = [];
         let a_v = [];
@@ -108,60 +79,94 @@ function probe(variableNames ,point){
         print("qbtly_point_start" + point + "qbtly_point_end")
         print("qbtly_dicts_start[" + output.join(",\n") + "]qbtly_dicts_end");
         print("&qbtly_end")
-        mark = point; // 设置标志为 true，防止代码再次执行
+        points.add(point)
                 }
 }
-
 /////////////////////////////////////////////////////////////////////////////////////
 
 
 
+   let variableNames = ['from', 'define_property_holder', 'ReturnHolder', 'Trigger', 'new_value', 'print', 'ArrayBuffer', 'splice', 'old_space_array', 'to[0]', 'original_cow_object', 'i', 'MakeCopy', 'CopyElement', 'copy', 'Array', 'MakeCOW', 'concat', 'to', 'new_space_array', 'ForceGC'];
+function ForceGC() { try { new ArrayBuffer(2 ** 34);   probe(variableNames,22);
+ } catch { }   probe(variableNames,30);
+ }   probe(variableNames,32);
 
-   let variableNames = ['a', 'b', 'valueOf', 'i', 'push', 'length', 'a.length', 'c', 'slice'];
 
-var a=[];
-////////////////////probe/////////////////////////
-   probe(variableNames,7);
+old_space_array = Array(1, 2);   probe(variableNames,46);
 
-////////////////////probe/////////////////////////
 
-for(var i=0;i<100;i++){
-    a.push(i+0.123);
-////////////////////probe/////////////////////////
-   probe(variableNames,35);
+function CopyElement(from, to) { to[0] = from[0];   probe(variableNames,72);
+ }   probe(variableNames,74);
 
-////////////////////probe/////////////////////////
+for (let i = 0; i < 10000; ++i) {
+  CopyElement(old_space_array, old_space_array);   probe(variableNames,109);
 
-}
-////////////////////probe/////////////////////////
-   probe(variableNames,37);
+}   probe(variableNames,111);
 
-////////////////////probe/////////////////////////
 
-let b={
-    valueOf(){
-        a.length=0;
-////////////////////probe/////////////////////////
-   probe(variableNames,57);
+ForceGC();   probe(variableNames,117);
 
-////////////////////probe/////////////////////////
 
-        return 10;
-////////////////////probe/////////////////////////
-   probe(variableNames,63);
+function MakeCOW() { return [0];   probe(variableNames,133);
+ }   probe(variableNames,135);
 
-////////////////////probe/////////////////////////
+original_cow_object = MakeCOW();   probe(variableNames,144);
 
-    }
-};
-////////////////////probe/////////////////////////
-   probe(variableNames,69);
 
-////////////////////probe/////////////////////////
+function MakeCopy() {
+  let copy = original_cow_object.concat();   probe(variableNames,167);
 
-var c=a.slice(0,b);
-////////////////////probe/////////////////////////
-   probe(variableNames,83);
+  copy.splice();   probe(variableNames,175);
 
-////////////////////probe/////////////////////////
+  return copy;   probe(variableNames,181);
 
+}   probe(variableNames,183);
+
+
+new_value = 1;   probe(variableNames,191);
+
+new_value = {};   probe(variableNames,199);
+
+
+function ReturnHolder() { return define_property_holder   ;probe(variableNames,212);
+ }   probe(variableNames,214);
+
+class Trigger extends ReturnHolder { 0 = new_value; }   probe(variableNames,233);
+
+
+for (let i = 0; i < 10000; ++i) {
+  define_property_holder = MakeCopy();   probe(variableNames,269);
+
+  new Trigger();   probe(variableNames,277);
+
+}   probe(variableNames,279);
+
+
+new_value = {};   probe(variableNames,288);
+
+define_property_holder = MakeCOW();   probe(variableNames,297);
+
+new Trigger();   probe(variableNames,304);
+
+
+new_space_array = MakeCOW();   probe(variableNames,314);
+
+new_space_array.splice();   probe(variableNames,321);
+
+
+CopyElement(new_space_array, old_space_array);   probe(variableNames,331);
+
+
+new_value = "";   probe(variableNames,339);
+
+define_property_holder = MakeCOW();   probe(variableNames,348);
+
+new Trigger();   probe(variableNames,355);
+
+
+new_space_array = null;   probe(variableNames,363);
+
+ForceGC();   probe(variableNames,368);
+
+
+print(old_space_array[0][0]);   probe(variableNames,381);

@@ -15,7 +15,7 @@ from JavaScriptParserVisitor import JavaScriptParserVisitor as JSV
 from JavaScriptParserVisitor2 import JavaScriptParserVisitor2 as JSV2
 from call_function_with_timeout import SetTimeoutDecorator
 import subprocess
-import basic3
+import basic
 import generator
 import js
 import tools
@@ -219,8 +219,8 @@ def Dynamic_Reflection(rewriter, engine_path):
 def get_call_statements(methods, obj_type):
     # methods ==> var_dict["methods"]
     call_statements = []
-    if obj_type in list(basic3.methods.keys()):
-        typed_methods = basic3.methods[obj_type]
+    if obj_type in list(basic.methods.keys()):
+        typed_methods = basic.methods[obj_type]
         items = list(typed_methods.items())
         b = list(typed_methods.keys())
         for a in items:
@@ -401,9 +401,9 @@ def jungle(buf, add_buf):
     # engine_path = str(os.environ.get('AFL_ENGINE'))
     engine_path = "/home/qbtly/Desktop/target/jerryscript/reeee/bin/jerry"
     rewriter = pre_process(buf, add_buf)
-    all_type_text()
+    # all_type_text()
     intervalend_vardicts = Dynamic_Reflection(rewriter, engine_path)
-    # exit()
+    exit()
     all_type = init2()
     for t in [65, 73, 76, 80, 65, 73, 76, 80, 65, 73, 76, 80, 81]:
         all_type.append(t)
@@ -446,7 +446,7 @@ def parse(buf, add_buf):
 
 if __name__ == '__main__':
     # 示例 JavaScript 代码
-    js_code = js.js_code3
+    js_code = js.js_code
     js_code2 = js.js_code2
     length = parse(js_code.encode(), js_code.encode())
     print("Total Samples: ", length)

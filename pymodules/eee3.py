@@ -188,7 +188,7 @@ def Dynamic_Reflection(rewriter, engine_path):
 
     # cmd = ["/home/qbtly/Desktop/target/V8/v8/0124/d8", "--allow-natives-syntax", "--expose-gc", f"output/output{index}.js"]
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
     # print(result.stdout)
 
     pattern0 = r'qbtly_start&(.*?)&qbtly_end'
@@ -397,8 +397,8 @@ def jungle(buf, add_buf):
         return len(config.new_samples)
 
     # 获取输出路径
-    # engine_path = str(os.environ.get('AFL_ENGINE'))
-    engine_path = "/jerryscript/0321nothing/bin/jerry"
+    engine_path = str(os.environ.get('AFL_ENGINE'))
+    # engine_path = "/jerryscript/0321nothing/bin/jerry"
     rewriter = pre_process(buf, add_buf)
 
     intervalend_vardicts = Dynamic_Reflection(rewriter, engine_path)

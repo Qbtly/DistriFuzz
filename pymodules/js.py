@@ -110,9 +110,10 @@ function setReplacer(key, value) {
 /////////////////////////////////////////////////////////////////////////////////////
 '''
 arr2 = r'''
-let mark = 0;
+let points = new Set()
 function probe(variableNames ,point){
-    let isExecuted = mark === point;
+
+    let isExecuted = points.has(point);
     if (!isExecuted) {
         let output = [];
         let a_v = [];
@@ -132,7 +133,7 @@ function probe(variableNames ,point){
         print("qbtly_point_start" + point + "qbtly_point_end")
         print("qbtly_dicts_start[" + output.join(",\n") + "]qbtly_dicts_end");
         print("&qbtly_end")
-        mark = point;
+        points.add(point)
                 }
 }
 /////////////////////////////////////////////////////////////////////////////////////

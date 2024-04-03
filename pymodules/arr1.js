@@ -48,6 +48,7 @@ var varIntrospect = (objname, obj) => {
             }
         }
     }
+    print(methods.length)
     return {'obj':objname, 'type':type, 'methods':methods, 'attrs':attrs};
 };
 function setReplacer(key, value) {
@@ -55,6 +56,32 @@ function setReplacer(key, value) {
     return [...value];
   }
   return value;
+}
+
+let mark = 0;
+function probe(variableNames ,point){
+    let isExecuted = mark === point;
+    if (!isExecuted) {
+        let output = [];
+        let a_v = [];
+        variableNames.forEach(varName => {
+        try{
+            let varInstance = eval(varName);
+            let typeInfo = DynamicReflection(varName, varInstance);
+            if (typeInfo !== undefined)
+                output.push(JSON.stringify(typeInfo, setReplacer, 2));
+                a_v.push(varName);
+        }catch(err){
+            null;
+            }
+        });
+        print("qbtly_start&")
+        print("qbtly_aviliable[" + a_v + "]qbtly_var");
+        print("qbtly_point_start" + point + "qbtly_point_end")
+        print("qbtly_dicts_start[" + output.join(",\n") + "]qbtly_dicts_end");
+        print("&qbtly_end")
+        mark = point;
+                }
 }
 /////////////////////////////////////////////////////////////////////////////////////
 
