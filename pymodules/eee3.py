@@ -174,7 +174,7 @@ def Dynamic_Reflection(rewriter, engine_path):
 
     # with open(f"output/{engine_name}/output.js", "w") as js_file:
     try:
-        with open(f"custom_mutators/examples/output/{engine_name}/output.js", "w") as js_file:
+        with open(f"pymodules/output/{engine_name}/output.js", "w") as js_file:
             js_file.write(js0)
             js_file.write(js2)
             js_file.write("\n\n")
@@ -188,7 +188,7 @@ def Dynamic_Reflection(rewriter, engine_path):
     for item in engine_paths:
         if item:
             cmd.append(item)
-    cmd.append(f"custom_mutators/examples/output/{engine_name}/output.js")
+    cmd.append(f"pymodules/output/{engine_name}/output.js")
     # cmd.append(f"output/{engine_name}/output.js")
 
     # cmd = ["/home/qbtly/Desktop/target/V8/v8/0124/d8", "--allow-natives-syntax", "--expose-gc", f"output/output{index}.js"]
