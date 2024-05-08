@@ -139,7 +139,7 @@ def Parse_ast1(buf):
             func_va_rname_split = func_va_rname.split('.')
             for fc_name in list(VariableNames):
                 if fc_name in func_va_rname_split:
-                    print(fc_name, func_va_rname)
+                    # print(fc_name, func_va_rname)
                     VariableNames.remove(FunctionVarNames[func_va_rname])
                     break
     # for k in list(IntervalEnd_VariableNames.keys()):
@@ -215,19 +215,23 @@ def dynamic_reflection(rewriter, engine_path):
     # cmd.append(f"output/{engine_name}/output.js")
     cmd.append(f"pymodules/output/{engine_name}/output.js")
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-    # print(cmd, result.stdout)
-
-    # 检查命令是否执行成功
-    if result.returncode == 0:
-        print("Command executed successfully.")
-        # print("Output:", result.stdout)
-    else:
-        print("Command failed with return code", result.returncode)
-        print("Error output:", result.stderr)
+    result_text = ""
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        result_text = result.stdout
+    except subprocess.TimeoutExpired as e:
+        print("The command timed out. Consider increasing the timeout or checking the command.")
+        # print(e.stdout)
+        if e.stdout:
+            result_text = e.stdout.decode('utf-8')
+        else:
+            return {}
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return {}
 
     pattern0 = r'qbtly_start&(.*?)&qbtly_end'
-    outputs = tools.extract(result.stdout, pattern0)
+    outputs = tools.extract(result_text, pattern0)
     for output in outputs:
         # print(output)
         pattern2 = r'qbtly_point_start(.*?)qbtly_point_end'
@@ -325,13 +329,13 @@ def jungle(buf, add_buf):
     intervalend_vardicts = dynamic_reflection(rewriter, engine_path)
     # print('=======================')
     all_type2 = init2()
-    all_type3 = init2()
-    for t in [65, 73, 76, 80, 65, 73, 76, 80, 65, 73, 76, 80, 81]:
+    all_type3 = init3()
+    for t in [65, 73, 76, 80, 65, 73, 76, 80, 65, 73, 76, 80, 81, 81, 81]:
         all_type2.append(t)
 
     new_sample = ""
     count = 0
-    change_p = 0.8
+    change_p = 0.6
     ran = 0
     while count < config.sample_size:
         count += 1  # 增加迭代计数

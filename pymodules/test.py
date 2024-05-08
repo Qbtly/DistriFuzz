@@ -140,7 +140,7 @@ def Parse_ast1(buf):
             func_va_rname_split = func_va_rname.split('.')
             for fc_name in list(VariableNames):
                 if fc_name in func_va_rname_split:
-                    print(fc_name, func_va_rname)
+                    # print(fc_name, func_va_rname)
                     VariableNames.remove(FunctionVarNames[func_va_rname])
                     break
     # for k in list(IntervalEnd_VariableNames.keys()):
@@ -216,19 +216,32 @@ def dynamic_reflection(rewriter, engine_path):
     cmd.append(f"output/{engine_name}/output.js")
     # cmd.append(f"pymodules/output/{engine_name}/output.js")
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-    # print(cmd, result.stdout)
+    result_text = ""
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        result_text = result.stdout
+    except subprocess.TimeoutExpired as e:
+        print("The command timed out. Consider increasing the timeout or checking the command.")
+        # print(e.stdout)
+        if e.stdout:
+            result_text = e.stdout.decode('utf-8')
+        else:
+            return {}
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return {}
+    
+    # print(result_text)
 
     # 检查命令是否执行成功
-    if result.returncode == 0:
-        print("Command executed successfully.")
-        # print("Output:", result.stdout)
-    else:
-        print("Command failed with return code", result.returncode)
-        print("Error output:", result.stderr)
+    # if result.returncode == 0:
+    #     print("Command executed successfully.")
+    #     # print("Output:", result.stdout)
+    # else:
+    #     print("Error output:", result.stderr)
 
     pattern0 = r'qbtly_start&(.*?)&qbtly_end'
-    outputs = tools.extract(result.stdout, pattern0)
+    outputs = tools.extract(result_text, pattern0)
     for output in outputs:
         # print(output)
         pattern2 = r'qbtly_point_start(.*?)qbtly_point_end'
@@ -260,8 +273,8 @@ def dynamic_reflection(rewriter, engine_path):
             # var_dict["attrs"]
         IntervalEnd_Vardicts[interval_end] = dynamic_results
 
-    print("IntervalEnd_Vardicts: ", IntervalEnd_Vardicts, VariableNames)
-    print("IntervalEnd_VariableNames: ", IntervalEnd_VariableNames)
+    # print("IntervalEnd_Vardicts: ", IntervalEnd_Vardicts, VariableNames)
+    # print("IntervalEnd_VariableNames: ", IntervalEnd_VariableNames)
     return IntervalEnd_Vardicts
 
 
@@ -313,9 +326,11 @@ def jungle(buf, add_buf):
     if is_timeout1 is True or is_timeout2 is True:
         return len(config.new_samples)
 
-    # engine_path = "/jsc/fuzz/JSCOnly/Release/bin/jsc"
-    engine_path = "/home/qbtly/Desktop/target/gecko-dev/js/src/fuzz/dist/bin/js"
+    # engine_path = "/home/qbtly/Desktop/target/WebKit/0422_debug/JSCOnly/Debug/bin/jsc"
+    engine_path = "/home/qbtly/Desktop/target/gecko-dev/js/src/gcov/dist/bin/js"
     # engine_path = "/home/qbtly/Desktop/target/jerryscript/reeee/bin/jerry"
+    # engine_path = "/home/qbtly/Desktop/target/V8/v8/0414_debug/d8 --allow-natives-syntax --expose-gc"
+
     # 获取输出路径
     # engine_path = str(os.environ.get('AFL_ENGINE'))
     engine_paths = engine_path.split(' ')
@@ -326,21 +341,23 @@ def jungle(buf, add_buf):
     intervalend_vardicts = dynamic_reflection(rewriter, engine_path)
     print('=======================')
     all_type2 = init2()
-    all_type3 = init2()
-    for t in [65, 73, 76, 80, 65, 73, 76, 80, 65, 73, 76, 80, 81]:
+    all_type3 = init3()
+    for t in [65, 73, 76, 80, 65, 73, 76, 80, 65, 73, 76, 80, 81, 81, 81]:
         all_type2.append(t)
 
     new_sample = ""
     count = 0
     g_count = 0
     c_count = 0
-    change_p = 0.8
+    g_valid_count = 0
+    c_valid_count = 0
+    change_p = 0.6
     ran = 0
     
     while count < config.sample_size:
-        print("count:", count)
-        print("  g_count:", g_count)
-        print("  c_count:", c_count)
+        # print("count:", count)
+        # print("  g_count:", g_count)
+        # print("  c_count:", c_count)
         count += 1  # 增加迭代计数
         rewriter.rollback(rewriter.lastRewriteTokenIndex(), "default")
 
@@ -351,18 +368,22 @@ def jungle(buf, add_buf):
             # 生成
             new_sample = generate(rewriter, intervalend_vardicts, engine_name)
             g_count += 1
+            if new_sample not in config.new_samples:
+                g_valid_count += 1
         else:
             # 更改
             new_sample = change(rewriter, all_type2, all_type3)
             c_count += 1
+            if new_sample not in config.new_samples:
+                c_valid_count += 1
 
         if new_sample not in config.new_samples:
             config.new_samples.append(new_sample)
             if len(config.new_samples) > config.sample_size:
                 return len(config.new_samples)
             
-    print("g_count:", g_count)
-    print("c_count:", c_count)
+    print("generate:", g_valid_count, "/", g_count)
+    print("crossover:", c_valid_count, "/", c_count)
     return len(config.new_samples)
 
 
@@ -390,7 +411,6 @@ def fuzz():
 
 def parse(buf, add_buf):
     is_done2, is_timeout2, erro_message2, results2 = jungle(buf, add_buf)
-    print(is_done2, is_timeout2, erro_message2, results2)
     return len(config.new_samples)
 
 
@@ -411,7 +431,9 @@ if __name__ == '__main__':
             # print(fuzz().decode())
     # print("/home/qbtly/Desktop/aaaaa/b")
 
-    poc_dir = "/home/qbtly/Desktop/PatchFuzz/js/js_poc/spidermonkey"
+    # poc_dir = "/home/qbtly/Desktop/PatchFuzz/js/js_poc/spidermonkey"
+    poc_dir = "/home/qbtly/Desktop/PatchFuzz/js/seeds/jsc/queue"
+
     directory_path = Path(poc_dir)
     i = 1
     
@@ -423,12 +445,13 @@ if __name__ == '__main__':
             # bad_mark = bad
             try:
                 with open(file, 'r') as f:
+                    print('-----------------------------------------------------')
                     print(i, file)
                     js_content = f.read()
                     length = parse(js_content.encode(), js_content.encode())
 
                     print("Total Samples: ", length)
-                    path = '/home/qbtly/Desktop/aaaaa/b/'
+                    path = '/home/qbtly/Desktop/aaaaa/c/'
                     shutil.rmtree(path)
                     os.mkdir(path)
                     if length > 0:
@@ -436,9 +459,9 @@ if __name__ == '__main__':
                             with open(path + str(k) + ".js", "w") as f:
                                 f.write(fuzz().decode())
                                 f.close()
-                    print("--------------origin--------------")
-                    print(js_content)
-                    print("----------------------------------")
+                    # print("--------------origin--------------")
+                    # print(js_content)
+                    # print("----------------------------------")
                     # tools.all_type_text()
                     # if bad_mark != bad:
                     #     print(i, file)
@@ -449,5 +472,5 @@ if __name__ == '__main__':
     
             except Exception as e:
                 print(i, file, e)
-            input('continue?')
+            # input('continue?')
             i = i + 1

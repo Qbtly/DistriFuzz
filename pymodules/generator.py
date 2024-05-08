@@ -449,6 +449,8 @@ def get_call_statements(methods, obj_type):
                 continue
             if method not in b:
                 call_statements.append(f"{method}()")
+    else:
+        call_statements.append(f"constructor()")
                 # print(obj_type, method)
     # 输出生成的调用语句
     # for statement in call_statements:
@@ -471,7 +473,7 @@ def get_new_statement_obj(engine_name, new_var, obj):
             sm_func = random.choice(basic.newglobal)
             new_statement = f"\nlet {new_var} = {sm_func}({args});\n"
         else:
-            basic_methods = list(basic.methods[obj['type']].keys())
+            basic_methods = list(basic.methods.get(obj['type'], {"constructor": []}).keys())
             methods = basic_methods
             chosen_method = f"{str(random.choice(methods))}({args})"
             new_statement = f"\nlet {new_var} = {obj['obj']}.{chosen_method};\n"
