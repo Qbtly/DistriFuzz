@@ -486,7 +486,9 @@ def get_new_statement_obj(engine_name, new_var, obj):
             else:
                 static_attr = random.choice(list(basic.static_attrs.get(engine_name, {}).keys()))
                 new_statement = f"\nlet {new_var} = {static_attr};\n"
-                new_statement += f"\n{static_attr} = {get_random_value(basic.static_attrs[static_attr])};\n"
+                value = get_random_value(basic.static_attrs.get(engine_name, {}).get(static_attr, ""))
+                if value:
+                    new_statement += f"\n{static_attr} = {value};\n"
         else:
             # need instance
             # 符合规范
@@ -510,9 +512,9 @@ def get_new_statement(engine_name, new_var):  # 只能调用静态函数
         else:
             static_attr = random.choice(list(basic.static_attrs.get(engine_name, {}).keys()))
             new_statement = f"\nlet {new_var} = {static_attr};\n"
-            value = get_random_value(basic.static_attrs[static_attr])
+            value = get_random_value(basic.static_attrs.get(engine_name, {}).get(static_attr, ""))
             if value:
-                new_statement += f"\n{static_attr} = {get_random_value(basic.static_attrs[static_attr])};\n"
+                new_statement += f"\n{static_attr} = {value};\n"
     # print(new_statement)
     return new_statement
 
