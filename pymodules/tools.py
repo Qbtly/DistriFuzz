@@ -17,6 +17,7 @@ def all_type_text():
             for interval in config.intervals[type]:
                 print(interval, end="  |  ")
             print('\n')
+    exit(1)
 
 
 def set_timeout(num, callback):
@@ -42,6 +43,12 @@ def set_timeout(num, callback):
 
     return wrap
 
+
+def remove_between(string, start, end):
+    pattern = re.compile(re.escape(start) + '.*?' + re.escape(end))
+    return re.sub(pattern, '', string, count=0)
+
+
 def extract(text, pattern):
     matches = re.findall(pattern, text, re.DOTALL)
     if matches:
@@ -49,12 +56,14 @@ def extract(text, pattern):
     else:
         return ''
 
+
 def extract0(text, pattern, default):
     matches = re.findall(pattern, text, re.DOTALL)
     if matches:
         return matches[0]
     else:
         return default
+
 
 def del_file(path_data):
     for i in os.listdir(path_data):  # os.listdir(path_data)#返回一个列表，里面是当前目录下面的所有东西的相对路径
@@ -64,6 +73,7 @@ def del_file(path_data):
         else:
             del_file(file_data)
 
+
 # 函数定义：根据指定的obj名字选择字典
 def select_by_objname(data, obj, obj_name):
     dict_list = [item for item in data if item[obj] == obj_name]
@@ -72,21 +82,13 @@ def select_by_objname(data, obj, obj_name):
     except:
         return {}
 
+
 def select_by_obj_name(data, obj, obj_name):
     dict_list = [item for item in data if item[obj] == obj_name]
     try:
         return dict_list[0]
     except:
         return {}
-
-def get_newname(names):
-    zdy = "zdy"
-    i = 0
-    new_name = zdy + str(i)
-    while new_name in names:
-        i = random.randint(0, 1000)
-        new_name = zdy + str(i)
-    return new_name
 
 
 def format_boolean(optional):
@@ -95,6 +97,7 @@ def format_boolean(optional):
     elif optional == "True":
         return True
     return False
+
 
 def classify(objs):
     # classify
@@ -106,7 +109,8 @@ def classify(objs):
         obj_name8type[obj_type].add(obj_info['obj'])
     return obj_name8type
 
+
 if __name__ == '__main__':
-    names=['zdy0','zdy1']
+    names = ['zdy0', 'zdy1']
     for n in range(200):
         print(get_newname(names))

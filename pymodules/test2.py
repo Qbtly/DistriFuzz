@@ -53,7 +53,6 @@ class MyVisitor(JSV):
         self.currentScope = self.scopes[-1] if self.scopes else self.globalScope
 
     # def visitExpressionStatement(self, ctx):
-    #     # 使用expressionSequence代替之前假定的expression方法
     #     expressionSequence = ctx.expressionSequence()
     #     for expression in expressionSequence.getChildren():
     #         # print(type(expression).__name__)

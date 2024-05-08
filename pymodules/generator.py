@@ -4,6 +4,16 @@ import basic
 import tools
 
 types = ['string', 'number', 'string', 'number', 'string', 'number', 'object', 'object', 'array']
+types2 = ['string', 'number']
+
+
+def get_newname(zdy, names):
+    i = 0
+    new_name = zdy + str(i)
+    while new_name in names:
+        i = random.randint(0, 1000)
+        new_name = zdy + str(i)
+    return new_name
 
 
 # 定义一个函数来生成随机字符串
@@ -144,7 +154,8 @@ def get_array2(p, depth):
     array_values = []
     for _ in range(array_length):
         value_type = random.choice(types)
-        array_values.append(get_random_value(value_type, depth=depth))
+        new_value = get_random_value(value_type, depth=depth)
+        array_values.append(new_value)
     return array_values
 
 
@@ -177,36 +188,47 @@ def get_function(p, variables, value_range, special_values, depth):
         if special_values:
             return random.choice(special_values)
     else:  # 生成一个函数
-        param_name = tools.get_newname(variables)
+        param_name = get_newname('zdy', variables)
         function_name = f'function_{param_name}'
         function_body = """
                 var zdy_a = new Array(5);
                 zdy_b = {};
+                var zdy_c = [];
             """
         function_value = f'function {function_name}(zdy_b) {{ {function_body} }}'
 
         return function_value
 
+
 def get_function2(p, variables):
-    param_name = tools.get_newname(variables)
+    param_name = get_newname('zdy', variables)
     function_name = f'function_{param_name}'
     function_body = """
             var zdy_a = new Array(5);
-            zdy_b = {};
+            var zdy_b = {};
+            var zdy_c = [];
         """
     function_value = f'function {function_name}(zdy_b) {{ {function_body} }}'
 
     return function_value
 
+
 def get_random_value(type1, depth=3):
-    result = 0
-    if depth <= 0:
-        return result  # 达到深度限制，返回空
+    result = None
     type1 = str(type1).lower()
+    p = random.random()
+
+    if depth <= 0:
+        type1 = random.choice(types2)
+        if type1 == 'string':
+            result = get_string2(p)
+        elif type1 == 'number':
+            result = get_number2(p)
+        return result  # 达到深度限制，返回空
+
     if type1 == 'any':
         type1 = random.choice(types)
 
-    p = random.random()
     if type1 == 'string':
         result = get_string2(p)
     elif type1 == 'array':
@@ -215,7 +237,9 @@ def get_random_value(type1, depth=3):
         result = get_number2(p)
     elif type1 == 'object':
         result = get_object2(p, depth=depth - 1)
+
     return result
+
 
 def generate_parameter(param_info, origin_variables, depth=3):
     param_name = param_info['name']
@@ -301,8 +325,200 @@ def get_API_statement(obj_info, variables, new_name):
     print(call_statement)
     return call_statement
 
+
+###################################################################
+def adjust(new_statement, intervalend_varnames, interval_end):
+    # 调整
+    change_p = 0.5
+    for n in range(3):
+        # random.shuffle(intervalend_varnames[interval_end])
+        ran = random.random()
+        if "tmp_number" in new_statement:
+            # Number
+            try:
+                if ran < change_p:
+                    # new_arg = random.choice(obj_name8type['Number'])
+                    new_arg = random.choice(intervalend_varnames[interval_end])
+                else:
+                    new_arg = get_random_value('number')
+            except:
+                new_arg = get_random_value('number')
+            # 替换
+            new_statement = new_statement.replace("tmp_number", str(new_arg), 1)
+            pass
+        elif "tmp_array" in new_statement:
+            # Array
+            try:
+                if ran < change_p:
+                    # new_array = random.choice(obj_name8type['Array'])
+                    new_array = random.choice(intervalend_varnames[interval_end])
+                else:
+                    new_array = get_random_value('array')
+            except:
+                new_array = get_random_value('array')
+            # 替换
+            new_statement = new_statement.replace("tmp_array", str(new_array), 1)
+        elif "tmp_string" in new_statement:
+            # String
+            try:
+                if ran < change_p:
+                    new_arg = random.choice(intervalend_varnames[interval_end])
+                else:
+                    new_arg = get_random_value('string')
+            except:
+                new_arg = get_random_value('string')
+            # 替换
+            new_statement = new_statement.replace("tmp_string", "'{}'".format(str(new_arg)), 1)
+        elif "tmp_object" in new_statement:
+            # Object
+            try:
+                if ran < change_p:
+                    new_arg = random.choice(intervalend_varnames[interval_end])
+                else:
+                    new_arg = get_random_value('object')
+            except:
+                new_arg = get_random_value('object')
+            # 替换
+            new_statement = new_statement.replace("tmp_object", str(new_arg), 1)
+        elif "tmp_function" in new_statement:
+            # Function
+            try:
+                if ran < change_p:
+                    new_arg = random.choice(intervalend_varnames[interval_end])
+                else:
+                    new_arg = get_function2(1, intervalend_varnames[interval_end])
+            except:
+                new_arg = get_function2(1, intervalend_varnames[interval_end])
+            # 替换
+            new_statement = new_statement.replace("tmp_function", str(new_arg), 1)
+        elif "tmp_any" in new_statement:
+            try:
+                new_arg = random.choice(intervalend_varnames[interval_end])
+            except:
+                new_arg = get_random_value('any')
+            # 替换
+            new_statement = new_statement.replace("tmp_any", str(new_arg), 1)
+        # 未完待续
+    # print(new_statement)
+    return new_statement
+
+
+def get_property_call(new_var, obj):
+    # 选择obj
+    var_name = obj['obj']
+
+    # method or attr
+    member_type = random.choice(["methods", "methods", "methods", "methods", "attrs"])
+    # member_type = random.choice(["methods"])
+    if member_type == "methods":
+        try:
+            chosen_method = random.choice(obj["methods"])
+            call_statement = f"\nlet {new_var} = {var_name}.{chosen_method};\n"
+        except:
+            call_statement = ""
+    else:
+        try:
+            chosen_attr = random.choice(list(obj[member_type].keys()))
+            call_statement = f"\nlet {new_var} = {var_name}.{chosen_attr};\n"
+            call_statement += f"\n{var_name}.{chosen_attr} = {get_random_value(obj[member_type][chosen_attr])};\n"
+        except:
+            try:
+                chosen_method = random.choice(obj["methods"])
+                call_statement = f"\nlet {new_var} = {var_name}.{chosen_method};\n"
+            except:
+                call_statement = ""
+
+    return call_statement
+
+
+def get_call_statements(methods, obj_type):
+    # methods ==> var_dict["methods"]
+    call_statements = []
+    if obj_type in list(basic.methods.keys()):
+        typed_methods = basic.methods[obj_type]
+        items = list(typed_methods.items())
+        b = list(typed_methods.keys())
+        for a in items:
+            args = ", ".join(a[1])
+            call_statement = f"{a[0]}({args})"
+            # call_statement = f"{a[0]}()"
+            call_statements.append(call_statement)
+        for method in methods:
+            if method == 'crash' or method == 'oomTest':
+                # print(method)
+                continue
+            if method not in b:
+                call_statements.append(f"{method}()")
+                # print(obj_type, method)
+    # 输出生成的调用语句
+    # for statement in call_statements:
+    #     print(statement)
+    return call_statements
+
+
+def get_random_args(add_list):
+    arg_type = add_list + ['tmp_number', 'tmp_string', 'tmp_object', 'tmp_any']
+    arg_num = random.choice([0, 1, 2])
+    args = ", ".join(random.sample(arg_type, arg_num))
+    return args
+
+
+def get_new_statement_obj(engine_name, new_var, obj):
+    p = random.random()
+    if engine_name == 'js' and p < 0.6:  # Spidermonkey
+        args = get_random_args(basic.newglobal)
+        if p < 0.3:
+            sm_func = random.choice(basic.newglobal)
+            new_statement = f"\nlet {new_var} = {sm_func}({args});\n"
+        else:
+            basic_methods = list(basic.methods[obj['type']].keys())
+            methods = basic_methods
+            chosen_method = f"{str(random.choice(methods))}({args})"
+            new_statement = f"\nlet {new_var} = {obj['obj']}.{chosen_method};\n"
+    else:
+        call_type = random.choice(['static', 'normal', 'normal', 'normal'])
+        if call_type == 'static':
+            member_type = random.choice(["methods", "methods", "attrs"])
+            if member_type == "methods":
+                static_method = random.choice(list(basic.static_methods.get(engine_name, {}).keys()))
+                args = get_random_args([])
+                new_statement = f"\nlet {new_var} = {static_method}({args});\n"
+            else:
+                static_attr = random.choice(list(basic.static_attrs.get(engine_name, {}).keys()))
+                new_statement = f"\nlet {new_var} = {static_attr};\n"
+                new_statement += f"\n{static_attr} = {get_random_value(basic.static_attrs[static_attr])};\n"
+        else:
+            # need instance
+            # 符合规范
+            new_statement = get_property_call(new_var, obj)
+    # print(new_statement)
+    return new_statement
+
+
+def get_new_statement(engine_name, new_var):  # 只能调用静态函数
+    p = random.random()
+    if engine_name == 'js' and p < 0.6:  # Spidermonkey
+        args = get_random_args(basic.newglobal)
+        sm_func = random.choice(basic.newglobal)
+        new_statement = f"\nlet {new_var} = {sm_func}({args});\n"
+    else:
+        member_type = random.choice(["methods", "methods", "attrs"])
+        if member_type == "methods":
+            args = get_random_args([])
+            static_method = random.choice(list(basic.static_methods.get(engine_name, {}).keys()))
+            new_statement = f"\nlet {new_var} = {static_method}({args});\n"
+        else:
+            static_attr = random.choice(list(basic.static_attrs.get(engine_name, {}).keys()))
+            new_statement = f"\nlet {new_var} = {static_attr};\n"
+            value = get_random_value(basic.static_attrs[static_attr])
+            if value:
+                new_statement += f"\n{static_attr} = {get_random_value(basic.static_attrs[static_attr])};\n"
+    # print(new_statement)
+    return new_statement
+
+
 if __name__ == '__main__':
 
-    for n in range(200):
-        a = get_function(1.0, ['v8'], [], [], 3)
-        print(a,)
+    for n in range(2000):
+        a = get_random_value('array', depth=3)
+        print(a)
