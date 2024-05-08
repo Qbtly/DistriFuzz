@@ -25,12 +25,13 @@ def get_string(p, variables, value_range, special_values):
         if special_values:
             return random.choice(special_values)
     else:  # 生成一个参数
-        return ''.join(random.choices(string.ascii_letters + string.digits, k=random.randint(1, 10)))  # 生成一个随机字符串
+        # ss = "'" + ''.join(random.choices(string.ascii_letters + string.digits, k=random.randint(1, 10))) + "'"  # 生成一个随机字符串
+        return ''.join(random.choices(string.ascii_letters + string.digits, k=random.randint(1, 10)))
 
 
 def get_string2(p):
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=random.randint(1, 10)))  # 生成一个随机字符串
-
+    # ss = "'" + ''.join(random.choices(string.ascii_letters + string.digits, k=random.randint(1, 10))) + "'"  # 生成一个随机字符串
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=random.randint(1, 10)))
 
 def get_number(p, variables, value_range, special_values):
     numbers = [
@@ -420,7 +421,12 @@ def get_property_call(new_var, obj):
         try:
             chosen_attr = random.choice(list(obj[member_type].keys()))
             call_statement = f"\nlet {new_var} = {var_name}.{chosen_attr};\n"
-            call_statement += f"\n{var_name}.{chosen_attr} = {get_random_value(obj[member_type][chosen_attr])};\n"
+            type = obj[member_type][chosen_attr]
+            value = get_random_value(obj[member_type][chosen_attr])
+            if value:
+                if type.lower() == 'string':
+                    value = "'" + value + "'"
+                call_statement += f"\n{var_name}.{chosen_attr} = {value};\n"
         except:
             try:
                 chosen_method = random.choice(obj["methods"])
@@ -488,8 +494,11 @@ def get_new_statement_obj(engine_name, new_var, obj):
             else:
                 static_attr = random.choice(list(basic.static_attrs.get(engine_name, {}).keys()))
                 new_statement = f"\nlet {new_var} = {static_attr};\n"
-                value = get_random_value(basic.static_attrs.get(engine_name, {}).get(static_attr, ""))
+                type = basic.static_attrs.get(engine_name, {}).get(static_attr, "")
+                value = get_random_value(type)
                 if value:
+                    if type.lower() == 'string':
+                        value = "'" + value + "'"
                     new_statement += f"\n{static_attr} = {value};\n"
         else:
             # need instance
@@ -514,8 +523,11 @@ def get_new_statement(engine_name, new_var):  # 只能调用静态函数
         else:
             static_attr = random.choice(list(basic.static_attrs.get(engine_name, {}).keys()))
             new_statement = f"\nlet {new_var} = {static_attr};\n"
-            value = get_random_value(basic.static_attrs.get(engine_name, {}).get(static_attr, ""))
+            type = basic.static_attrs.get(engine_name, {}).get(static_attr, "")
+            value = get_random_value(type)
             if value:
+                if type.lower() == 'string':
+                    value = "'" + value + "'"
                 new_statement += f"\n{static_attr} = {value};\n"
     # print(new_statement)
     return new_statement
@@ -524,5 +536,5 @@ def get_new_statement(engine_name, new_var):  # 只能调用静态函数
 if __name__ == '__main__':
 
     for n in range(2000):
-        a = get_random_value('array', depth=3)
+        a = get_random_value('string', depth=3)
         print(a)

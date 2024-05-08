@@ -308,7 +308,10 @@ def insert(rewriter, all_type):
 
 def change(rewriter, all_type2, all_type3):
     type2 = random.choice(all_type2)
-    type3 = random.choice(all_type3)
+    if random.random() > 0.2:
+        type3 = random.choice(all_type3)
+    else:
+        type3 = type2
     if len(config.intervals[type2]) > 0 and len(config.texts[type3]) > 0:
         interval = random.choice(config.intervals[type2])
         text = random.choice(config.texts[type3])
@@ -436,41 +439,63 @@ if __name__ == '__main__':
 
     directory_path = Path(poc_dir)
     i = 1
-    
+    bad = 0
+    good = 0
     for file in directory_path.rglob('*'):
         if i < 0:
             i = i + 1
             continue
         if file.is_file():
-            # bad_mark = bad
+            # try:
+            #     cmd = ["/home/qbtly/Desktop/target/gecko-dev/js/src/gcov/dist/bin/js", "--fuzzing-safe", file]
+            #     result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            #     if not result.returncode == 0:
+            #         bad += 1
+            #         print("Bad seed:", bad, "Return_code:",result.returncode, file)
+            #         continue
+            #     else:
+            #         good += 1
+            #         with open(file, 'r') as f1:
+            #             js_content = f1.read()
+            #             f1.close()
+            #         with open("/home/qbtly/Desktop/aaaaa/jsc_sm/" + str(good) + ".js", "w") as f2:
+            #             f2.write(js_content)
+            #             f2.close()
+            # except:
+            #     bad += 1
+            #     print("Bad seed:", bad, i, file)
+            #     continue
+            
             try:
                 with open(file, 'r') as f:
-                    print('-----------------------------------------------------')
-                    print(i, file)
                     js_content = f.read()
-                    length = parse(js_content.encode(), js_content.encode())
+                    f.close()
+                print('-----------------------------------------------------')
+                print(i, file)
+                
+                length = parse(js_content.encode(), js_content.encode())
 
-                    print("Total Samples: ", length)
-                    path = '/home/qbtly/Desktop/aaaaa/c/'
-                    shutil.rmtree(path)
-                    os.mkdir(path)
-                    if length > 0:
-                        for k in range(0, length):
-                            with open(path + str(k) + ".js", "w") as f:
-                                f.write(fuzz().decode())
-                                f.close()
-                    # print("--------------origin--------------")
-                    # print(js_content)
-                    # print("----------------------------------")
-                    # tools.all_type_text()
-                    # if bad_mark != bad:
-                    #     print(i, file)
-                    #     # print("--------------origin--------------")
-                    #     # print(js_content)
-                    #     # print("----------------------------------")
-                    #     print(bad, '/', i)
+                print("Total Samples: ", length)
+                path = '/home/qbtly/Desktop/aaaaa/c/'
+                shutil.rmtree(path)
+                os.mkdir(path)
+                if length > 0:
+                    for k in range(0, length):
+                        with open(path + str(k) + ".js", "w") as f:
+                            f.write(fuzz().decode())
+                            f.close()
+                # print("--------------origin--------------")
+                # print(js_content)
+                # print("----------------------------------")
+                # tools.all_type_text()
+                # if bad_mark != bad:
+                #     print(i, file)
+                #     # print("--------------origin--------------")
+                #     # print(js_content)
+                #     # print("----------------------------------")
+                #     print(bad, '/', i)
     
             except Exception as e:
                 print(i, file, e)
-            # input('continue?')
+            input('continue?')
             i = i + 1

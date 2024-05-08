@@ -298,7 +298,10 @@ def insert(rewriter, all_type):
 
 def change(rewriter, all_type2, all_type3):
     type2 = random.choice(all_type2)
-    type3 = random.choice(all_type3)
+    if random.random() > 0.2:
+        type3 = random.choice(all_type3)
+    else:
+        type3 = type2
     if len(config.intervals[type2]) > 0 and len(config.texts[type3]) > 0:
         interval = random.choice(config.intervals[type2])
         text = random.choice(config.texts[type3])
