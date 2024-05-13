@@ -81,7 +81,7 @@ function my_print(a_v, point, output){
             
 
 
-   let variableNames = ['Object.isFrozen(siteObject.raw)', 'expected', 'value', 'actual', 'elements', 'desc', 'siteObject', 'Object.getOwnPropertyDescriptor(siteObject,i)', 'shouldBe', 'i', 'count', 'tag'];
+   let variableNames = ['actual', 'Object.getOwnPropertyDescriptor(siteObject,i)', 'i', 'elements', 'Object.isFrozen(siteObject.raw)', 'value', 'shouldBe', 'siteObject', 'tag', 'count', 'expected', 'desc'];
 
 /*----------------------------------------probe----------------------------------------*/
             ;(function() {let point = -1; if (!points.has(point)) { let output = []; let a_v = [];

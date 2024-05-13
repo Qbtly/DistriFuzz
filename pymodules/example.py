@@ -333,7 +333,7 @@ def jungle(buf, add_buf):
     # print('=======================')
     all_type2 = init2()
     all_type3 = init3()
-    for t in [65, 73, 76, 80, 65, 73, 76, 80, 65, 73, 76, 80, 81, 81, 81]:
+    for t in [2, 65, 73, 76, 80, 65, 73, 76, 80, 65, 73, 76, 80, 81, 81, 81]:
         all_type2.append(t)
 
     new_sample = ""
