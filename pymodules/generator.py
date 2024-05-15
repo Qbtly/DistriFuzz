@@ -130,27 +130,43 @@ def get_number2(p):
         return random.uniform(-100, 100)  # 随机生成一个浮点数值
 
 
-# 生成一个随机数组
-def get_array(p, variables, value_range, special_values, depth):
+def get_iterable(p, variables, param_value, depth):
     if p < 0.5:  # 变量
         if variables:
             return random.choice(variables)
     elif 0.5 < p < 1.0:  # 特殊值
-        if special_values:
-            return random.choice(special_values)
+            param_type = random.choice(param_value)
+            return get_random_value(param_type)
+    # else:  # 生成一个数组
+    #     array_length = random.randint(0, 10)  # 随机生成数组长度
+    #     array_values = []
+    #     for _ in range(array_length):
+    #         param_type = 'number'
+    #         # param_type = random.choice(types)
+    #         array_values.append(
+    #             generate_parameter({'type': param_type, 'value': param_value}, variables, depth=depth))
+    #     return array_values
+
+
+def get_array(p, variables, param_value, param_boundary, depth):
+    if p < 0.5:  # 变量
+        if variables:
+            return random.choice(variables)
+    elif 0.5 < p < 1.0:  # 特殊值
+        if param_boundary:
+            return random.choice(param_boundary)
     else:  # 生成一个数组参数
         array_length = random.randint(0, 10)  # 随机生成数组长度
         array_values = []
         for _ in range(array_length):
-            value_type = random.choice(types)
+            param_type = random.choice(types)
             array_values.append(
-                generate_parameter({'type': value_type, 'valueRange': value_range, 'specialValues': special_values},
+                generate_parameter({'type': param_type, 'value': param_value, 'boundary': param_boundary},
                                    variables, depth=depth))
         return array_values
-
+    
 
 def get_array2(p, depth):
-    # 生成一个数组参数
     array_length = random.randint(0, 10)  # 随机生成数组长度
     array_values = []
     for _ in range(array_length):
@@ -242,55 +258,96 @@ def get_random_value(type1, depth=3):
     return result
 
 
-def generate_parameter(param_info, origin_variables, depth=3):
-    param_name = param_info['name']
-    param_type = param_info['type'].lower()
-    value_range = param_info.get('valueRange', None)
-    special_values = param_info.get('specialValues', [])
-    optional = param_info.get('optional', False)
-
-    if isinstance(origin_variables, dict):
-        variables = origin_variables.get(param_type, [])
+def generate_parameter(param_info, total_variables, depth=3):
+    param_name = param_info.get('name','')
+    param_type = param_info.get('type','').lower()
+    param_value = param_info.get('value', [])
+    param_boundary = param_info.get('boundary', [])
+    param_args = param_info.get('args',[])
+    
+    if isinstance(total_variables, dict):
+        variables = total_variables.get(param_type, [])
     else:
-        variables = origin_variables
+        variables = total_variables
 
     p = random.random()
-    if isinstance(optional, str):
-        optional = tools.format_boolean(optional)
 
-    if optional and p < 0.5:
-        return None  # 参数是可选的且随机决定不生成该参数
-
-    if param_type == 'number':
-        return get_number(p, variables, value_range, special_values)
-    elif param_type == 'string':
-        return get_string(p, variables, value_range, special_values)
-    elif param_type == 'array':
-        return get_array(p, variables, value_range, special_values, depth=depth - 1)
-    elif param_type == 'object':
-        return get_object(p, variables, value_range, special_values, depth=depth - 1)
-    elif param_type == 'function':
-        return get_function(p, variables, value_range, special_values, depth=depth - 1)
+    if param_type == 'jsnumber':
+        return get_number(p, variables, param_value, param_boundary)
+    elif param_type == 'jsiterable':
+        return get_iterable(p, variables, param_value, depth=depth - 1)
+    # elif param_type == 'jsstring':
+    #     return get_string(p, variables, param_value, param_boundary)
+    # elif param_type == 'jsarray':
+    #     return get_array(p, variables, param_value, param_boundary, depth=depth - 1)
+    elif param_type == 'jsobject':
+        return get_object(p, variables, param_value, param_boundary, depth=depth - 1)
+    elif param_type == 'jsfunction':
+        return get_function(p, variables, param_value, param_boundary, depth=depth - 1)
     else:
         return random.choice(variables)
 
 
-def generate_parameters(method_info, variables):
-    parameters = method_info.get('parameters', [])
+def generate_parameters(parameters_info, variables):
     generated_params = []
-    for param_info in parameters:
-        generated_param = generate_parameter(param_info, variables)
-        if generated_param is not None:
-            generated_params.append(generated_param)
+    for param_info in parameters_info:
+        optional = param_info.get('optional', False)
+        if isinstance(optional, str):
+            optional = tools.format_boolean(optional)
+        if optional and random.random() < 0.5:
+            return None  
+        if param_info.get('...', False):
+            nums = 1
+        else:
+            nums = random.randint(0, 100)
+        for num in range(0,nums): #不包括nums
+            generated_param = generate_parameter(param_info, variables)
+            if generated_param is not None:
+                generated_params.append(generated_param)
     return generated_params
 
 
 def generate_method_call(var_type, method_name, variables):
-    method_info = basic.methods2.get(var_type, {}).get(method_name, {})
-    parameters = generate_parameters(method_info, variables)
+    builtin_info = a.builtin_objects.get(var_type, {})
+    instance_methods_info = builtin_info.get("instance_methods", {})
+    parameters_info = instance_methods_info.get(method_name, [])
+    parameters = generate_parameters(parameters_info, variables)
     return f"{method_name}({', '.join(map(str, parameters))})"
 
-
+# builtin_objects = {
+#                         "Error": {
+#                             "constructor": {
+#                                 "new Error":[],
+#                                 "Error":[]
+#                             },
+#                             "static_methods":{},
+#                             "static_properties":{},
+#                             "instance_methods":{
+#                                 "copyWithin"     : [
+#                                                         {
+#                                                             "name": "target",
+#                                                             "type": number,
+#                                                             "value": [anything],
+#                                                             "boundary": ["-length-1", "-length", "-1", "-0", "+0", "length-1", "length", "length+1"],
+#                                                         },
+#                                                         {
+#                                                             "name": "start",
+#                                                             "type": number,
+#                                                             "value": [anything],
+#                                                             "boundary": ["-length-1", "-length", "-1", "-0", "+0", "length-1", "length", "length+1"],
+#                                                         },
+#                                                         {
+#                                                             "name": "end",
+#                                                             "type": number,
+#                                                             "value": [anything],
+#                                                             "boundary": ["-length-1", "-length", "-1", "-0", "+0", "length-1", "length", "length+1"],
+#                                                             "optional": True
+#                                                         },
+#                                                     ]
+#                             },
+#                             "instance_properties":{},
+#                         }
+#                     }
 # obj['type']['copyWithin']['parameters']==>list[dict(name,type,valueRange,speciaValues,optional)]
 
 

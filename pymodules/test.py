@@ -273,7 +273,11 @@ def dynamic_reflection(rewriter, engine_path):
             # var_dict["attrs"]
         IntervalEnd_Vardicts[interval_end] = dynamic_results
 
-    # print("IntervalEnd_Vardicts: ", IntervalEnd_Vardicts, VariableNames)
+    # print("IntervalEnd_Vardicts: ", IntervalEnd_Vardicts)
+    for a in IntervalEnd_Vardicts:
+        for b in IntervalEnd_Vardicts[a]:
+            if b['iterable']:
+                print(a, b['obj'])
     # print("IntervalEnd_VariableNames: ", IntervalEnd_VariableNames)
     return IntervalEnd_Vardicts
 
@@ -329,8 +333,8 @@ def jungle(buf, add_buf):
     if is_timeout1 is True or is_timeout2 is True:
         return len(config.new_samples)
 
-    # engine_path = "/home/qbtly/Desktop/target/WebKit/0422_debug/JSCOnly/Debug/bin/jsc"
-    engine_path = "/home/qbtly/Desktop/target/gecko-dev/js/src/gcov/dist/bin/js"
+    engine_path = "/home/qbtly/Desktop/target/WebKit/0422_debug/JSCOnly/Debug/bin/jsc"
+    # engine_path = "/home/qbtly/Desktop/target/gecko-dev/js/src/gcov/dist/bin/js"
     # engine_path = "/home/qbtly/Desktop/target/jerryscript/reeee/bin/jerry"
     # engine_path = "/home/qbtly/Desktop/target/V8/v8/0414_debug/d8 --allow-natives-syntax --expose-gc"
 
@@ -472,9 +476,11 @@ if __name__ == '__main__':
                     f.close()
                 print('-----------------------------------------------------')
                 print(i, file)
+                print("--------------origin--------------")
+                print(js_content)
+                print("----------------------------------")
                 
                 length = parse(js_content.encode(), js_content.encode())
-
                 print("Total Samples: ", length)
                 path = '/home/qbtly/Desktop/aaaaa/c/'
                 shutil.rmtree(path)
@@ -484,9 +490,7 @@ if __name__ == '__main__':
                         with open(path + str(k) + ".js", "w") as f:
                             f.write(fuzz().decode())
                             f.close()
-                # print("--------------origin--------------")
-                # print(js_content)
-                # print("----------------------------------")
+                
                 # tools.all_type_text()
                 # if bad_mark != bad:
                 #     print(i, file)

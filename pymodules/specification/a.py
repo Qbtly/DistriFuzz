@@ -43,24 +43,46 @@ all_bs = [
     'Promise', 'Proxy', 'Map', 'WeakMap', 'Set', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Math', 'JSON', 'Reflect'
 ]
 
-anything = ".anything"
-integer = ".integer"
-number = ".number"
-string = ".string"
-negative = "negative"
-length = "length"
-function = ".function"
-object = ".object"
+#type
+anything = "jsanything"
+function = "jsfunction"
+object = "jsobject"
+iterable = "jsiterable"
+number = "jsnumber"
+string = "jsstring"
+
 undefined = "undefined"
 infinity = "Infinity"
 _infinity = "-Infinity"
 
+# negative = "negative"
+# integer = ".integer"
+length = "length"
+
 
 builtin_objects = {
+    # 23.1 Array Objects
+    # 23.2 TypedArray Objects
     "Array":{
         "constructor":{
-            "new Array":[],
-            "Array":[]
+            "new Array":[
+                {
+                    "name": "element",   #element or arrayLength
+                    "type": number,
+                    "value": [anything],
+                    "optional": True,
+                    "...": True   
+                }
+            ],
+            "Array":[
+                {
+                    "name": "arrayLength",
+                    "type": number,
+                    "value": [anything],
+                    "optional": True,
+                    "...": True   
+                }
+            ],
         },
         "static_methods":{
             # ( items [ , mapfn [ , thisArg ] ] )
@@ -121,6 +143,7 @@ builtin_objects = {
                 }
             ],
         },
+        "static_properties":{},
         "instance_methods":{
             "at"             : [
                 {
@@ -549,6 +572,7 @@ builtin_objects = {
             "new ArrayBuffer":[],
         },
         "static_methods":{},
+        "static_properties":{},
         "instance_methods":{
             "slice": ["tmp_number", "tmp_number"],
             "resize": ["tmp_number"],
@@ -559,8 +583,294 @@ builtin_objects = {
             "ArrayBuffer.isView": [],
         },
     },
+# 24 Keyed Collections
+    # 24.1 Map Objects
+    # 24.2 Set Objects
+    # 24.3 WeakMap Objects
+    # 24.4 WeakSet Objects
+    "Map": {
+        "constructor": {
+            "new Map":[
+                {
+                    "name": "iterable",
+                    "type": iterable,
+                    "value": [iterable],
+                    "optional": True,
+                }
+            ]
+        },
+        "static_methods":{},
+        "static_properties":{
+            # "Map.groupBy" : [.anything, .function()],
+            "Map.groupBy" : [
+                {
+                    "name": "items",
+                    "type": iterable,
+                    "value": [iterable],
+                },
+                {
+                    "name": "callbackfn",
+                    "type": function,
+                    "value": [function],
+                    "args": [
+                        {
+                            "name": "element",
+                            "type": iterable,
+                            "value": [iterable],
+                        },
+                        {
+                            "name": "index",
+                            "type": iterable,
+                            "value": [iterable],
+                        }
+                        
+                    ],
+                }
+            ]
+        },
+        "instance_methods":{
+            # "clear"   : [] => .undefined,
+            # "delete"  : [.anything] => .boolean,
+            # "entries" : [] => .object(),
+            # "forEach" : [.function(), .opt(.object())] => .undefined,
+            # "get"     : [.anything] => .anything,
+            # "has"     : [.anything] => .boolean,
+            # "keys"    : [] => .object(),
+            # "set"     : [.anything, .anything] => .jsMap,
+            # "values"  : [] => .object(),
+            "get": ["tmp_any"],
+            "set": ["tmp_any", "tmp_any"],
+            "has": ["tmp_any"],
+            "delete": ["tmp_any"],
+            "clear": [],
+            "entries": [],
+            "forEach": ["tmp_function"],
+            "keys": [],
+            "values": []
+        },
+        "instance_properties":{
+            # "size"      : .integer
+        },
+        
+    },
+    "Set": {
+        "constructor": {
+            "new Error":[],
+            "Error":[]
+        },
+        "static_methods":{},
+        "static_properties":{},
+        "instance_methods":{
+            # "add"     : [.anything] => .jsSet,
+            # "clear"   : [] => .undefined,
+            # "delete"  : [.anything] => .boolean,
+            # "entries" : [] => .object(),
+            # "forEach" : [.function(), .opt(.object())] => .undefined,
+            # "has"     : [.anything] => .boolean,
+            # "keys"    : [] => .object(),
+            # "values"  : [] => .object(),
+            "has": ["tmp_any"],
+            "add": ["tmp_any"],
+            "delete": ["tmp_any"],
+            "clear": [],
+            "entries": [],
+            "forEach": ["tmp_function"],
+            "values": [],
+            "keys": [],
+            "union": ["tmp_any"],
+            "intersection": ["tmp_any"],
+            "difference": ["tmp_any"],
+            "symmetricDifference": ["tmp_any"],
+            "isSubsetOf": ["tmp_any"],
+            "isSupersetOf": ["tmp_any"],
+            "isDisjointFrom": ["tmp_any"]
+        },
+        "instance_properties":{
+            # "size"      : .integer
+        },
+    },
+    "WeakMap": {
+        "constructor": {
+            "":[
+                
+            ],
+        },
+        "static_methods":{},
+        "static_properties":{},
+        "instance_methods":{
+            "delete": ["tmp_any"],
+            "get": ["tmp_any"],
+            "set": ["tmp_any", "tmp_any"],
+            "has": ["tmp_any"]
+            # "delete" : [.anything] => .boolean,
+            # "get"    : [.anything] => .anything,
+            # "has"    : [.anything] => .boolean,
+            # "set"    : [.anything, .anything] => .jsWeakMap,
+        },
+        "instance_properties":{},
+        
+    },
+    "WeakSet": {
+        "constructor": {
+            "new Error":[],
+            "Error":[]
+        },
+        "static_methods":{},
+        "static_properties":{},
+        "instance_methods":{
+            # "add"    : [.anything] => .jsWeakSet,
+            # "delete" : [.anything] => .boolean,
+            # "has"    : [.anything] => .boolean,
+            "delete": ["tmp_any"],
+            "has": ["tmp_any"],
+            "add": ["tmp_any"]
+        },
+        "instance_properties":{},
+        
+    },
     "String":{},
     "Object":{},
+    # 27 Control Abstraction Objects
+    # 27.1 Iteration
+    # 27.2 Promise Objects
+    # 27.3 GeneratorFunction Objects
+    # 27.4 AsyncGeneratorFunction Objects
+    # 27.5 Generator Objects
+    # 27.6 AsyncGenerator Objects
+    # 27.7 AsyncFunction Objects
+    "Promise": {
+        "constructor": {
+            "new Promise":[
+                {
+                    "name": "executor",
+                    "type": function,
+                    "value": [function],
+                    "args": [
+                        {
+                            "name": "resolveFunc",
+                            "type": function,
+                            "value": [function],
+                        },
+                        {
+                            "name": "rejectFunc",
+                            "type": function,
+                            "value": [function],
+                        }
+                    ],
+                }
+            ],
+        },
+        "static_methods":{
+            # "all"        : [.jsPromise...] => .jsPromise,
+            "Promise.all"        : [
+                {
+                    "name": "iterable",
+                    "type": iterable,
+                    "value": [iterable],
+                }
+            ],
+            # "allSettled" : [.jsPromise...] => .jsPromise,
+            "Promise.allSettled" : [
+                {
+                    "name": "iterable",
+                    "type": iterable,
+                    "value": [iterable],
+                }
+            ],
+            # "any"        : [.jsPromise...] => .jsPromise,
+            "Promise.any"        : [
+                {
+                    "name": "iterable",
+                    "type": iterable,
+                    "value": [iterable],
+                }
+            ],
+            # "race"       : [.jsPromise...] => .jsPromise,
+            "Promise.race"       : [
+                {
+                    "name": "iterable",
+                    "type": iterable,
+                    "value": [iterable],
+                }
+            ],
+            # "reject"     : [.anything] => .jsPromise,
+            "Promise.reject"     : [
+                {
+                    "name": "reason",
+                    "type": anything,
+                    "value": [anything],
+                }
+            ],
+            # "resolve"    : [.anything] => .jsPromise,
+            "Promise.resolve"    : [
+                {
+                    "name": "value",
+                    "type": anything,
+                    "value": [anything],
+                }
+            ],
+            # "withResolvers" : [] => .object(withProperties: ["promise", "resolve", "reject"]),
+            "Promise.withResolvers" : [],
+        },
+        "static_properties":{
+            "Promise.prototype" : object
+        },
+        "instance_methods":{
+            # "catch"   : [.function()] => .jsPromise,
+            "catch": [
+                {
+                    "name": "onRejected",
+                    "type": function,
+                    "value": [function],
+                    "args": [
+                        {
+                            "name": "reason",
+                            "type": anything,
+                            "value": [anything],
+                        }
+                    ],
+                }
+            ],
+            # "finally" : [.function()] => .jsPromise, 
+            "finally": [
+                {
+                    "name": "onFinally",
+                    "type": function,   #no arguments
+                    "value": [function],
+                    "boundary": ["() => {}"],
+                }
+            ],
+            # "then"    : [.function()] => .jsPromise,
+            "then": [
+                {
+                    "name": "onFulfilled",
+                    "type": function,
+                    "value": [function],
+                    "args": [
+                        {
+                            "name": "value",
+                            "type": anything,
+                            "value": [anything],
+                        }
+                    ],
+                },
+                {
+                    "name": "onRejected",
+                    "type": function,
+                    "value": [function],
+                    "args": [
+                        {
+                            "name": "reason",
+                            "type": anything,
+                            "value": [anything],
+                        }
+                    ],
+                    "optional": True
+                }
+            ],
+        },
+        "instance_properties":{},        
+    },
     #https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/TypedArray#parameters
     "Int8Array": {
         "constructor": {
@@ -623,6 +933,7 @@ builtin_objects = {
             "Error":[]
         },
         "static_methods":{},
+        "static_properties":{},
         "instance_methods":{
             "toString": [],
             "stack": ["tmp_string"]
@@ -674,21 +985,25 @@ builtin_objects = {
 }
 
 
-# [
-                {
+
+f =             {
                     "name": "",
-                    "type": ,
+                    "type": anything,
                     "value": [],
                     "boundary": [],
-                    "optional": True
+                    "optional": True,
+                    "...": True
                 }
-#             ]
-"Error": {
+
+{
+    "Error": {
         "constructor": {
             "new Error":[],
             "Error":[]
         },
         "static_methods":{},
+        "static_properties":{},
         "instance_methods":{},
         "instance_properties":{},
-    },
+    }
+}

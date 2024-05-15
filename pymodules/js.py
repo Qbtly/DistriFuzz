@@ -1,4 +1,9 @@
 arr1 = r'''
+
+function isIterable(obj) {
+    return obj != null && typeof obj[Symbol.iterator] === 'function';
+}
+
 var DynamicReflection = (objname, obj) => {
     var attrs = {};
     var methods = new Set();
@@ -47,8 +52,11 @@ var DynamicReflection = (objname, obj) => {
             }
         }
     }
-    return {'obj':objname, 'type':type, 'methods':methods, 'attrs':attrs};
+    var iterable = isIterable(obj);
+    return {'obj':objname, 'type':type, 'iterable':iterable, 'methods':methods, 'attrs':attrs};
 };
+
+
 
 /////////////////////////////////////////////////////////////////////////////////////
 '''
