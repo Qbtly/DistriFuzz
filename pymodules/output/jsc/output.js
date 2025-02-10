@@ -79,8 +79,9 @@ function check_time(now_time){
 }
 
 function my_print(a_v, point, output){
+    let av = a_v.join(" <qbav> ");
     print("qbtly_start&");
-    print("qbtly_aviliable[" + a_v + "]qbtly_var");
+    print("qbtly_aviliable" + av + "qbtly_var");
     print("qbtly_point_start" + point + "qbtly_point_end");
     print("qbtly_dicts_start[" + output.join(",\n") + "]qbtly_dicts_end");
     print("&qbtly_end");
@@ -89,7 +90,7 @@ function my_print(a_v, point, output){
             
 
 
-   let variableNames = ['i', 'Object.isFrozen(siteObject.raw)', 'Object.getOwnPropertyDescriptor(siteObject,i)', 'expected', 'tag', 'siteObject', 'actual', 'count', 'value', 'shouldBe', 'elements', 'desc'];
+   let variableNames = ['print()'];
 
 /*----------------------------------------probe----------------------------------------*/
             ;(function() {let point = -1; if (!points.has(point)) { let output = []; let a_v = [];
@@ -98,11 +99,20 @@ function my_print(a_v, point, output){
                     if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
                 );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
 /*----------------------------------------probe----------------------------------------*/
-function shouldBe(actual, expected) {
-    if (actual !== expected)
-        throw new Error('bad value: ' + actual);
+
+
+if (print()) {
+    while(1){}
 /*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 36; if (!points.has(point)) { let output = []; let a_v = [];
+            ;(function() {let point = 18; if (!points.has(point)) { let output = []; let a_v = [];
+                variableNames.forEach(varName => {try{
+                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
+                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
+                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
+/*----------------------------------------probe----------------------------------------*/
+ while(1){}
+/*----------------------------------------probe----------------------------------------*/
+            ;(function() {let point = 25; if (!points.has(point)) { let output = []; let a_v = [];
                 variableNames.forEach(varName => {try{
                     let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
                     if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
@@ -111,262 +121,7 @@ function shouldBe(actual, expected) {
 
 }
 /*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 38; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-
-function tag(elements) {
-    return function (siteObject) {
-        shouldBe(siteObject instanceof Array, true);
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 73; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-        shouldBe(Object.isFrozen(siteObject), true);
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 88; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-        shouldBe(siteObject.raw instanceof Array, true);
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 104; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-        shouldBe(Object.isFrozen(siteObject.raw), true);
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 121; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-        shouldBe(siteObject.hasOwnProperty("raw"), true);
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 136; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-        shouldBe(siteObject.propertyIsEnumerable("raw"), false);
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 151; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-        shouldBe(siteObject.length, arguments.length);
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 165; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-        shouldBe(siteObject.raw.length, arguments.length);
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 181; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-        var count = siteObject.length;
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 193; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-        for (var i = 0; i < count; ++i) {
-            shouldBe(siteObject.hasOwnProperty(i), true);
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 234; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-            var desc = Object.getOwnPropertyDescriptor(siteObject, i);
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 252; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-            shouldBe(desc.writable, false);
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 264; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-            shouldBe(desc.enumerable, true);
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 276; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-            shouldBe(desc.configurable, false);
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 288; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-        }
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 291; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-        shouldBe(siteObject.length, elements.length + 1);
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 309; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-        for (var i = 0; i < elements.length; ++i)
-            shouldBe(arguments[i + 1], elements[i]);
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 355; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-    };
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 359; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-}
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 361; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-
-var value = {
-    toString() {
-        throw new Error('incorrect');
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 388; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-    },
-    valueOf() {
-        throw new Error('incorrect');
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 410; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-    }
-};
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 416; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-
-tag([])``;
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 426; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-tag([])`Hello`;
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 440; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-tag([])`Hello World`;
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 460; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-tag([value])`Hello ${value} World`;
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 485; if (!points.has(point)) { let output = []; let a_v = [];
-                variableNames.forEach(varName => {try{
-                    let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
-                    if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)
-                );}catch(err){null;}}); my_print(a_v, point, output); points.add(point);} check_time(Date.now()); })();
-/*----------------------------------------probe----------------------------------------*/
-
-tag([value, value])`Hello ${value} OK, ${value}`;
-/*----------------------------------------probe----------------------------------------*/
-            ;(function() {let point = 515; if (!points.has(point)) { let output = []; let a_v = [];
+            ;(function() {let point = 27; if (!points.has(point)) { let output = []; let a_v = [];
                 variableNames.forEach(varName => {try{
                     let typeInfo = DynamicReflection(varName, eval(varName)); a_v.push(varName);
                     if (typeInfo !== undefined) output.push(JSON.stringify(typeInfo, setReplacer, 2)

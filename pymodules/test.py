@@ -248,8 +248,8 @@ def dynamic_reflection(rewriter, engine_path):
         interval_end = int(tools.extract0(output, pattern2, 0))
 
         pattern1 = r'qbtly_aviliable(.*?)qbtly_var'
-        js_list = str(tools.extract0(output, pattern1, [])).strip('[]')
-        js_list = js_list.split(',') if js_list else []
+        js_list = str(tools.extract0(output, pattern1, []))
+        js_list = js_list.split(" <qbav> ") if js_list else []
         IntervalEnd_VariableNames[interval_end] = [item.strip() for item in js_list]
 
         pattern3 = r'qbtly_dicts_start(.*?)qbtly_dicts_end'
@@ -274,11 +274,11 @@ def dynamic_reflection(rewriter, engine_path):
         IntervalEnd_Vardicts[interval_end] = dynamic_results
 
     # print("IntervalEnd_Vardicts: ", IntervalEnd_Vardicts)
-    for a in IntervalEnd_Vardicts:
-        for b in IntervalEnd_Vardicts[a]:
-            if b['iterable']:
-                print(a, b['obj'])
-    # print("IntervalEnd_VariableNames: ", IntervalEnd_VariableNames)
+    # for a in IntervalEnd_Vardicts:
+    #     for b in IntervalEnd_Vardicts[a]:
+    #         if b['iterable']:
+    #             print(a, b['obj'])
+    
     return IntervalEnd_Vardicts
 
 
@@ -291,16 +291,21 @@ def generate(rewriter, intervalend_vardicts, engine_name):
         new_var = generator.get_newname('zdy', VariableNames)
         # 确定可用变量
         objs = intervalend_vardicts[interval_end]
-        # print(objs)
+        # print("1---")
         if len(objs) > 0:
+            # print("2---")
             obj = random.choice(objs)  # obj-->dict
+            # print("2.1---")
             new_statement = generator.get_new_statement_obj(engine_name, new_var, obj)
+            # print("2.2---")
         else:
-            new_statement = generator.get_new_statement(engine_name, new_var)
+            # print("3---")
+            new_statement = ''#generator.get_new_statement(engine_name, new_var)
         if "BigFloat.parseFloat()" in new_statement:
             new_sample = rewriter.getDefaultText()
             return new_sample
         new_statement = generator.adjust(new_statement, IntervalEnd_VariableNames, interval_end)
+        # print(new_statement)
         rewriter.insertAfter(interval_end, new_statement)
     new_sample = rewriter.getDefaultText()
     return new_sample
@@ -378,11 +383,15 @@ def jungle(buf, add_buf):
             if new_sample not in config.new_samples:
                 g_valid_count += 1
         else:
-            # 更改
-            new_sample = change(rewriter, all_type2, all_type3)
-            c_count += 1
+            new_sample = generate(rewriter, intervalend_vardicts, engine_name)
+            g_count += 1
             if new_sample not in config.new_samples:
-                c_valid_count += 1
+                g_valid_count += 1
+            # 更改
+            # new_sample = change(rewriter, all_type2, all_type3)
+            # c_count += 1
+            # if new_sample not in config.new_samples:
+            #     c_valid_count += 1
 
         if new_sample not in config.new_samples:
             config.new_samples.append(new_sample)
@@ -418,10 +427,44 @@ def fuzz():
 
 def parse(buf, add_buf):
     is_done2, is_timeout2, erro_message2, results2 = jungle(buf, add_buf)
+    print(erro_message2)
     return len(config.new_samples)
 
 
 if __name__ == '__main__':
+    directory = "/home/qbtly/Desktop/PatchFuzz/js/seeds/sm/"
+    path = '/home/qbtly/Desktop/aaaaa/c/'
+    shutil.rmtree(path)
+    os.mkdir(path)
+    file5 = tools.select_random_files(directory, num_files=50)
+    i = 1
+    for file in file5:
+        if i == 13:
+            break
+        with open(file, 'r') as f:
+            js_content = f.read()
+            f.close()
+        if "Error" in js_content:
+            continue
+        length = parse(js_content.encode(), js_content.encode())
+        # print("VariableNames: ", VariableNames)
+        # print("--------------origin--------------")
+        # print(js_content)
+        # print("----------------------------------")
+        print("Total Samples: ", length)
+        if length > 700:
+            pathi = os.path.join(path, str(i))
+            i += 1
+            os.mkdir(pathi)
+            for k in range(0, length):
+                with open(os.path.join(pathi, str(k) + ".js") , "w") as f:
+                    f.write(fuzz().decode())
+                    f.close()
+        # exit()
+# "/home/qbtly/Desktop/PatchFuzz/js/seeds/sm/187.js"
+# "/home/qbtly/Desktop/PatchFuzz/js/seeds/sm/214.js"
+
+
     # 示例 JavaScript 代码
     # js_code = js_test.js_code3
     # js_code2 = js_test.js_code2
@@ -439,67 +482,67 @@ if __name__ == '__main__':
     # print("/home/qbtly/Desktop/aaaaa/b")
 
     # poc_dir = "/home/qbtly/Desktop/PatchFuzz/js/js_poc/spidermonkey"
-    poc_dir = "/home/qbtly/Desktop/PatchFuzz/js/seeds/jsc/queue"
+    # poc_dir = "/home/qbtly/Desktop/PatchFuzz/js/seeds/jsc/queue"
 
-    directory_path = Path(poc_dir)
-    i = 1
-    bad = 0
-    good = 0
-    for file in directory_path.rglob('*'):
-        if i < 0:
-            i = i + 1
-            continue
-        if file.is_file():
-            # try:
-            #     cmd = ["/home/qbtly/Desktop/target/gecko-dev/js/src/gcov/dist/bin/js", "--fuzzing-safe", file]
-            #     result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            #     if not result.returncode == 0:
-            #         bad += 1
-            #         print("Bad seed:", bad, "Return_code:",result.returncode, file)
-            #         continue
-            #     else:
-            #         good += 1
-            #         with open(file, 'r') as f1:
-            #             js_content = f1.read()
-            #             f1.close()
-            #         with open("/home/qbtly/Desktop/aaaaa/jsc_sm/" + str(good) + ".js", "w") as f2:
-            #             f2.write(js_content)
-            #             f2.close()
-            # except:
-            #     bad += 1
-            #     print("Bad seed:", bad, i, file)
-            #     continue
+    # directory_path = Path(poc_dir)
+    # i = 1
+    # bad = 0
+    # good = 0
+    # for file in directory_path.rglob('*'):
+    #     if i < 0:
+    #         i = i + 1
+    #         continue
+    #     if file.is_file():
+    #         # try:
+    #         #     cmd = ["/home/qbtly/Desktop/target/gecko-dev/js/src/gcov/dist/bin/js", "--fuzzing-safe", file]
+    #         #     result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    #         #     if not result.returncode == 0:
+    #         #         bad += 1
+    #         #         print("Bad seed:", bad, "Return_code:",result.returncode, file)
+    #         #         continue
+    #         #     else:
+    #         #         good += 1
+    #         #         with open(file, 'r') as f1:
+    #         #             js_content = f1.read()
+    #         #             f1.close()
+    #         #         with open("/home/qbtly/Desktop/aaaaa/jsc_sm/" + str(good) + ".js", "w") as f2:
+    #         #             f2.write(js_content)
+    #         #             f2.close()
+    #         # except:
+    #         #     bad += 1
+    #         #     print("Bad seed:", bad, i, file)
+    #         #     continue
             
-            try:
-                with open(file, 'r') as f:
-                    js_content = f.read()
-                    f.close()
-                print('-----------------------------------------------------')
-                print(i, file)
-                print("--------------origin--------------")
-                print(js_content)
-                print("----------------------------------")
+    #         try:
+    #             with open(file, 'r') as f:
+    #                 js_content = f.read()
+    #                 f.close()
+    #             print('-----------------------------------------------------')
+    #             print(i, file)
+    #             print("--------------origin--------------")
+    #             print(js_content)
+    #             print("----------------------------------")
                 
-                length = parse(js_content.encode(), js_content.encode())
-                print("Total Samples: ", length)
-                path = '/home/qbtly/Desktop/aaaaa/c/'
-                shutil.rmtree(path)
-                os.mkdir(path)
-                if length > 0:
-                    for k in range(0, length):
-                        with open(path + str(k) + ".js", "w") as f:
-                            f.write(fuzz().decode())
-                            f.close()
+    #             length = parse(js_content.encode(), js_content.encode())
+    #             print("Total Samples: ", length)
+    #             path = '/home/qbtly/Desktop/aaaaa/c/'
+    #             shutil.rmtree(path)
+    #             os.mkdir(path)
+    #             if length > 0:
+    #                 for k in range(0, length):
+    #                     with open(path + str(k) + ".js", "w") as f:
+    #                         f.write(fuzz().decode())
+    #                         f.close()
                 
-                # tools.all_type_text()
-                # if bad_mark != bad:
-                #     print(i, file)
-                #     # print("--------------origin--------------")
-                #     # print(js_content)
-                #     # print("----------------------------------")
-                #     print(bad, '/', i)
+    #             # tools.all_type_text()
+    #             # if bad_mark != bad:
+    #             #     print(i, file)
+    #             #     # print("--------------origin--------------")
+    #             #     # print(js_content)
+    #             #     # print("----------------------------------")
+    #             #     print(bad, '/', i)
     
-            except Exception as e:
-                print(i, file, e)
-            input('continue?')
-            i = i + 1
+    #         except Exception as e:
+    #             print(i, file, e)
+    #         input('continue?')
+    #         i = i + 1

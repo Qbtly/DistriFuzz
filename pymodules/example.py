@@ -238,8 +238,8 @@ def dynamic_reflection(rewriter, engine_path):
         interval_end = int(tools.extract0(output, pattern2, 0))
 
         pattern1 = r'qbtly_aviliable(.*?)qbtly_var'
-        js_list = str(tools.extract0(output, pattern1, [])).strip('[]')
-        js_list = js_list.split(',') if js_list else []
+        js_list = str(tools.extract0(output, pattern1, []))
+        js_list = js_list.split(" <qbav> ") if js_list else []
         IntervalEnd_VariableNames[interval_end] = [item.strip() for item in js_list]
 
         pattern3 = r'qbtly_dicts_start(.*?)qbtly_dicts_end'
@@ -283,7 +283,7 @@ def generate(rewriter, intervalend_vardicts, engine_name):
             new_statement = generator.get_new_statement_obj(engine_name, new_var, obj)
         else:
             new_statement = generator.get_new_statement(engine_name, new_var)
-        if "BigFloat.parseFloat()" in new_statement:
+        if "BigFloat.parseFloat" in new_statement or "std.setenv" in new_statement or "os.chdir" in new_statement or "d8.quit" in new_statement or "enableShellAllocationMetadataBuilder" in new_statement or "recomputeWrappers" in new_statement:
             new_sample = rewriter.getDefaultText()
             return new_sample
         new_statement = generator.adjust(new_statement, IntervalEnd_VariableNames, interval_end)
@@ -386,7 +386,8 @@ def fuzz():
     return bytearray(sample.encode())
 
 
-def parse(buf, add_buf):
+def parse(buf, add_buf, cur_id):
+    print('============================', cur_id, '============================')
     jungle(buf, add_buf)
     return len(config.new_samples)
 

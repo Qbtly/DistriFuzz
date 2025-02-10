@@ -64,63 +64,30 @@ def get_string(p, variables, value_range, special_values):
         # return ''.join(random.choices(string.ascii_letters + string.digits, k=random.randint(1, 10)))
 
 
-def get_number(p, variables, value_range, special_values):
-    numbers = [
-        -9223372036854775808, -9223372036854775807,
-        -9007199254740992, -9007199254740991, -9007199254740990,
-        -4294967297, -4294967296, -4294967295,
-        -2147483649, -2147483648, -2147483647,
-        -1073741824, -536870912, -268435456,
-        -65537, -65536, -65535,
-        -4096, -1024, -256, -128,
-        -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 64,
-        127, 128, 129,
-        255, 256, 257,
-        512, 1000, 1024, 4096, 10000,
-        65535, 65536, 65537,
-        268435439, 268435440, 268435441,
-        536870887, 536870888, 536870889,
-        268435456, 536870912, 1073741824,
-        1073741823, 1073741824, 1073741825,
-        2147483647, 2147483648, 2147483649,
-        4294967295, 4294967296, 4294967297,
-        9007199254740990, 9007199254740991, 9007199254740992,
-        9223372036854775807,
-        -1e-15, -1e12, -1e9, -1e6, -1e3,
-        -5.0, -4.0, -3.0, -2.0, -1.0,
-        -0.0, 0.0,
-        1.0, 2.0, 3.0, 4.0, 5.0,
-        1e3, 1e6, 1e9, 1e12, 1e-15,
-        '-Infinity',
-        'Number.MIN_SAFE_INTEGER - 1',
-        '-Number.EPSILON',
-        '-Number.MIN_VALUE',
-        'Number.MIN_VALUE',
-        'Number.EPSILON',
-        'Number.MAX_SAFE_INTEGER + 1',
-        'Infinity',
-        'NaN'
-    ]
-    if p < 0.4:  # 可转换为number的变量
+def get_number(variables, param_boundary):
+    p = random.random()
+    if p < 0.4:  # variable
         if variables:
-            return random.choice(variables)
-    elif 0.4 < p < 0.6:  # 特殊值
-        if special_values:
-            return random.choice(special_values)
-    elif 0.6 < p < 0.8:  # 特殊值集合
-        return random.choice(numbers)
-    else:  # 生成一个参数
-        if value_range == 'integer':
-            return random.randint(-100, 100)  # 随机生成一个整数值
+            number_value = random.choice(variables)
+            return number_value
+    elif 0.4 < p < 0.6:  # boundary
+        if param_boundary:
+            number_value = random.choice(param_boundary)
+            return number_value
+    else:  # random generate
+        p0 = random.random()
+        if p0 < 0.5:
+            return random.randint(-100, 100) 
         else:
-            return random.uniform(-100, 100)  # 随机生成一个浮点数值
+            return random.uniform(-100, 100)  
+        
 
-
-def get_iterable(p, variables, param_value, depth):
-    if p < 0.5:  # 变量
+def get_iterable(variables, param_value, depth):
+    p = random.random()
+    if p < 0.5:  
         if variables:
             return random.choice(variables)
-    elif 0.5 < p < 1.0:  # 特殊值
+    elif 0.5 < p < 1.0:  
             param_type = random.choice(param_value)
             return get_random_value(param_type)
     # else:  # 生成一个数组
@@ -198,57 +165,74 @@ def get_function(p, variables, value_range, special_values, depth):
 
 def generate_parameter(param_info, total_variables, depth=3):
     param_name = param_info.get('name','')
-    param_type = param_info.get('type','').lower()
-    param_value = param_info.get('value', [])
+    param_type1 = param_info.get('type','').lower()
+    param_value = param_info.get('value', [param_type1])
+    param_type2 = random.choice(param_value)
     param_boundary = param_info.get('boundary', [])
     param_args = param_info.get('args',[])
     
     if isinstance(total_variables, dict):
         variables = total_variables.get(param_type, [])
+        if not variables:
+            variables = total_variables
     else:
         variables = total_variables
 
     p = random.random()
 
+    if p < 0.5:
+        param_type = param_type1
+    else:
+        param_type = param_type2
+
     if param_type == 'jsnumber':
-        return get_number(p, variables, param_value, param_boundary)
-    elif param_type == 'jsiterable':
-        return get_iterable(p, variables, param_value, depth=depth - 1)
+        return get_number(variables, param_boundary)
+    # elif param_type == 'jsiterable':
+    #     return get_iterable(p, variables, param_value, depth=depth - 1)
     # elif param_type == 'jsstring':
     #     return get_string(p, variables, param_value, param_boundary)
     # elif param_type == 'jsarray':
     #     return get_array(p, variables, param_value, param_boundary, depth=depth - 1)
-    elif param_type == 'jsobject':
-        return get_object(p, variables, param_value, param_boundary, depth=depth - 1)
-    elif param_type == 'jsfunction':
-        return get_function(p, variables, param_value, param_boundary, depth=depth - 1)
+    # elif param_type == 'jsobject':
+    #     return get_object(p, variables, param_value, param_boundary, depth=depth - 1)
+    # elif param_type == 'jsfunction':
+    #     return get_function(p, variables, param_value, param_boundary, depth=depth - 1)
     else:
         return random.choice(variables)
 
 
 def generate_parameters(parameters_info, variables):
     generated_params = []
-    for param_info in parameters_info:
+    for param_info in parameters_info: #{}
         optional = param_info.get('optional', False)
+        multiple = param_info.get('...', False)
         if isinstance(optional, str):
             optional = tools.format_boolean(optional)
         if optional and random.random() < 0.5:
-            return None  
-        if param_info.get('...', False):
+            return generated_params  
+        if not multiple:
             nums = 1
         else:
             nums = random.randint(0, 100)
-        for num in range(0,nums): #不包括nums
+        for _ in range(0,nums): #不包括nums
             generated_param = generate_parameter(param_info, variables)
             if generated_param is not None:
                 generated_params.append(generated_param)
     return generated_params
 
 
-def generate_method_call(var_type, method_name, variables):
+def generate_instance_method_call(var_type, method_name, variables):
     builtin_info = a.builtin_objects.get(var_type, {})
     instance_methods_info = builtin_info.get("instance_methods", {})
     parameters_info = instance_methods_info.get(method_name, [])
+    parameters = generate_parameters(parameters_info, variables)
+    return f"{method_name}({', '.join(map(str, parameters))})"
+
+
+def generate_static_method_call(var_type, method_name, variables):
+    builtin_info = a.builtin_objects.get(var_type, {})
+    static_methods_info = builtin_info.get("static_methods", {})
+    parameters_info = static_methods_info.get(method_name, [])
     parameters = generate_parameters(parameters_info, variables)
     return f"{method_name}({', '.join(map(str, parameters))})"
 
@@ -331,6 +315,42 @@ def get_string2(p):
 
 
 def get_number2(p):
+    numbers = [
+        -9223372036854775808, -9223372036854775807,
+        -9007199254740992, -9007199254740991, -9007199254740990,
+        -4294967297, -4294967296, -4294967295,
+        -2147483649, -2147483648, -2147483647,
+        -1073741824, -536870912, -268435456,
+        -65537, -65536, -65535,
+        -4096, -1024, -256, -128,
+        -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 64,
+        127, 128, 129,
+        255, 256, 257,
+        512, 1000, 1024, 4096, 10000,
+        65535, 65536, 65537,
+        268435439, 268435440, 268435441,
+        536870887, 536870888, 536870889,
+        268435456, 536870912, 1073741824,
+        1073741823, 1073741824, 1073741825,
+        2147483647, 2147483648, 2147483649,
+        4294967295, 4294967296, 4294967297,
+        9007199254740990, 9007199254740991, 9007199254740992,
+        9223372036854775807,
+        -1e-15, -1e12, -1e9, -1e6, -1e3,
+        -5.0, -4.0, -3.0, -2.0, -1.0,
+        -0.0, 0.0,
+        1.0, 2.0, 3.0, 4.0, 5.0,
+        1e3, 1e6, 1e9, 1e12, 1e-15,
+        '-Infinity',
+        'Number.MIN_SAFE_INTEGER - 1',
+        '-Number.EPSILON',
+        '-Number.MIN_VALUE',
+        'Number.MIN_VALUE',
+        'Number.EPSILON',
+        'Number.MAX_SAFE_INTEGER + 1',
+        'Infinity',
+        'NaN'
+    ]
     if p < 0.6:
         return random.choice(numbers)
     elif 0.6 < p < 0.8:
@@ -346,7 +366,7 @@ def get_array2(p, depth):
         value_type = random.choice(types)
         new_value = get_random_value(value_type, depth=depth)
         if new_value:
-            if value_type.lower() == 'string':
+            if value_type == 'string':
                 # if new_value.startswith("'") and new_value.endswith("'"):
                 new_value = str(new_value).strip("'")
             array_values.append(new_value)
@@ -357,7 +377,7 @@ def get_object2(p, depth):
     object_keys = random.choices(string.ascii_lowercase, k=random.randint(1, 5))  # key
     value_type = random.choice(types)
     object_values = [get_random_value(value_type, depth=depth) for _ in object_keys]
-    if value_type.lower() == 'string':
+    if value_type == 'string':
         for new_value in object_values:
             if new_value:
                 i = object_values.index(new_value)
@@ -410,7 +430,7 @@ def get_random_value(type1, depth=3):
 #################################----------------------------------------------------------------##################################
 def adjust(new_statement, intervalend_varnames, interval_end):
     # 调整
-    change_p = 0.7
+    change_p = 0.5
     for n in range(5):
         # random.shuffle(intervalend_varnames[interval_end])
         ran = random.random()
@@ -475,8 +495,11 @@ def adjust(new_statement, intervalend_varnames, interval_end):
             new_statement = new_statement.replace("tmp_function", str(new_arg), 1)
         elif "tmp_any" in new_statement:
             try:
+                # print(1)
+                # print(intervalend_varnames[interval_end])
                 new_arg = random.choice(intervalend_varnames[interval_end])
             except:
+                # print(2)
                 new_arg = get_random_value('any')
             # 替换
             new_statement = new_statement.replace("tmp_any", str(new_arg), 1)
@@ -502,28 +525,17 @@ def get_property_call(new_var, obj):
             call_statement = f"\nlet {new_var} = {var_name}.{chosen_method};\n"
         except:
             call_statement = ""
-    else: #attrs
+    else:
         try:
             chosen_attr = random.choice(list(obj[member_type].keys()))
+            call_statement = f"\nlet {new_var} = {var_name}.{chosen_attr};\n"
             type = obj[member_type][chosen_attr]
-            # type = random.choice(types)
-            value = get_random_value(type)
-
-            if chosen_attr.isnumeric() or chosen_attr.isdigit():
-                # print(obj[member_type])
-                call_statement = f"\nlet {new_var} = {var_name}[{chosen_attr}];\n"
-                if value:
-                    call_statement += f"\n{var_name}[{chosen_attr}] = {value};\n"
-            else:
-                call_statement = f"\nlet {new_var} = {var_name}.{chosen_attr};\n"
-                if value:
-                    call_statement += f"\n{var_name}.{chosen_attr} = {value};\n"
-            # print(call_statement)
-            # if chosen_attr == '3' :
-            #     print(list(obj[member_type].keys()))
-                # print(obj[member_type])
-            #     print(obj)
-   
+            type = random.choice(types)
+            value = get_random_value(obj[member_type][chosen_attr])
+            if value:
+                # if type.lower() == 'string':
+                #     value = "'" + value + "'"
+                call_statement += f"\n{var_name}.{chosen_attr} = {value};\n"
         except:
             try:
                 chosen_method = random.choice(obj["methods"])
@@ -542,10 +554,10 @@ def get_call_statements(methods, obj_type):
         items = list(typed_methods.items())
         b = list(typed_methods.keys())
         for a in items:
-            args = ", ".join(a[1])
-            # args = get_random_args([])
-            # if a[0] == "constructor":
-            #     args = ''
+            # args = ", ".join(a[1])
+            args = get_random_args([])
+            if a[0] == "constructor":
+                args = ''
             call_statement = f"{a[0]}({args})"
             # call_statement = f"{a[0]}()"
             call_statements.append(call_statement)
@@ -580,7 +592,7 @@ def get_new_statement_obj(engine_name, new_var, obj):
             chosen_method = f"{str(random.choice(methods))}({args})"
             new_statement = f"\nlet {new_var} = {obj['obj']}.{chosen_method};\n"
     else:
-        call_type = random.choice(['normal', 'normal', 'normal'])
+        call_type = random.choice(['static', 'normal', 'normal', 'normal'])
         if call_type == 'static':
             member_type = random.choice(["methods", "methods", "attrs"])
             if member_type == "methods":
@@ -591,10 +603,10 @@ def get_new_statement_obj(engine_name, new_var, obj):
                 static_attr = random.choice(list(basic.static_attrs.get(engine_name, {}).keys()))
                 new_statement = f"\nlet {new_var} = {static_attr};\n"
                 type = basic.static_attrs.get(engine_name, {}).get(static_attr, "")
-                # type = random.choice(types)
-                # print('2.1.1---', type)
+                type = random.choice(types)
+                print('2.1.1---', type)
                 value = get_random_value(type)
-                # print('2.1.2---')
+                print('2.1.2---')
                 if value:
                     # if type.lower() == 'string':
                     #     value = "'" + value + "'"
@@ -602,6 +614,7 @@ def get_new_statement_obj(engine_name, new_var, obj):
         else:
             # need instance
             new_statement = get_property_call(new_var, obj)
+    # print(new_statement)
     return new_statement
 
 
@@ -621,10 +634,10 @@ def get_new_statement(engine_name, new_var):  # just static
             static_attr = random.choice(list(basic.static_attrs.get(engine_name, {}).keys()))
             new_statement = f"\nlet {new_var} = {static_attr};\n"
             type = basic.static_attrs.get(engine_name, {}).get(static_attr, "")
-            # type = random.choice(types)
-            # print('3.1---', type)
+            type = random.choice(types)
+            print('3.1---', type)
             value = get_random_value(type)
-            # print('3.2---')
+            print('3.2---')
             if value:
                 # if type.lower() == 'string':
                 #     value = "'" + value + "'"

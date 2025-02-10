@@ -150,7 +150,7 @@ builtin_objects = {
                     "name": "index",
                     "type": number,
                     "value": [anything], #ToIntegerOrInfinity(index).
-                    "boundary": ["-length-1", "-length", "-1", "-0", "+0", "length-1", "length", "length+1"]
+                    "boundary": ["-length-1", "-length", "-1", "-0", "+0", "length-1", "length", "length+1", _infinity, infinity]
                 }
             ],
             "concat"         : [
@@ -166,19 +166,19 @@ builtin_objects = {
                     "name": "target",
                     "type": number,
                     "value": [anything],
-                    "boundary": ["-length-1", "-length", "-1", "-0", "+0", "length-1", "length", "length+1"],
+                    "boundary": ["-length-1", "-length", "-1", "-0", "+0", "length-1", "length", "length+1", _infinity, infinity],
                 },
                 {
                     "name": "start",
                     "type": number,
                     "value": [anything],
-                    "boundary": ["-length-1", "-length", "-1", "-0", "+0", "length-1", "length", "length+1"],
+                    "boundary": ["-length-1", "-length", "-1", "-0", "+0", "length-1", "length", "length+1", _infinity, infinity],
                 },
                 {
                     "name": "end",
                     "type": number,
                     "value": [anything],
-                    "boundary": ["-length-1", "-length", "-1", "-0", "+0", "length-1", "length", "length+1"],
+                    "boundary": ["-length-1", "-length", "-1", "-0", "+0", "length-1", "length", "length+1", _infinity, infinity, undefined],
                     "optional": True
                 },
             ],
@@ -569,9 +569,31 @@ builtin_objects = {
     },
     "ArrayBuffer": {
         "constructor": {
-            "new ArrayBuffer":[],
+            "new ArrayBuffer":[
+                {
+                    "name": "length", 
+                    "type": number,
+                    "value": [anything], 
+                },
+                {
+                    "name": "options",  
+                    "type": object,
+                    "value": [anything],
+                    "optional": True,
+                    "args": [
+                        {
+                            "name": "maxByteLength",
+                            "type": number,
+                            "value": [anything],
+                            "optional": True,
+                        }
+                    ],  
+                }
+            ],
         },
-        "static_methods":{},
+        "static_methods":{
+            "ArrayBuffer.isView": []
+        },
         "static_properties":{},
         "instance_methods":{
             "slice": ["tmp_number", "tmp_number"],
@@ -580,7 +602,10 @@ builtin_objects = {
             "transferToFixedLength": ["tmp_any", "tmp_number", "tmp_number"]
         },
         "instance_properties":{
-            "ArrayBuffer.isView": [],
+            "byteLength": [],
+            "detached": [],
+            "maxByteLength": [],
+            "resizable": [],
         },
     },
 # 24 Keyed Collections
@@ -623,7 +648,6 @@ builtin_objects = {
                             "type": iterable,
                             "value": [iterable],
                         }
-                        
                     ],
                 }
             ]

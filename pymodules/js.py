@@ -80,8 +80,9 @@ function check_time(now_time){
 }
 
 function my_print(a_v, point, output){
+    let av = a_v.join(" <qbav> ");
     print("qbtly_start&");
-    print("qbtly_aviliable[" + a_v + "]qbtly_var");
+    print("qbtly_aviliable" + av + "qbtly_var");
     print("qbtly_point_start" + point + "qbtly_point_end");
     print("qbtly_dicts_start[" + output.join(",\n") + "]qbtly_dicts_end");
     print("&qbtly_end");

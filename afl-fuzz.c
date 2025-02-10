@@ -164,6 +164,7 @@ EXP_ST u32 queued_paths,              /* Total number of queued testcases */
            var_byte_count,            /* Bitmap bytes with var behavior   */
            current_entry,             /* Current queue entry ID           */
            havoc_div = 1;             /* Cycle count divisor for havoc    */
+           cur_id;
 
 EXP_ST u64 total_crashes,             /* Total number of crashes          */
            unique_crashes,            /* Crashes with unique signatures   */
@@ -183,6 +184,7 @@ EXP_ST u64 total_crashes,             /* Total number of crashes          */
            bytes_trim_out,            /* Bytes coming outa the trimmer    */
            blocks_eff_total,          /* Blocks subject to effector maps  */
            blocks_eff_select;         /* Blocks selected as fuzzable      */
+           
 
 static u32 subseq_tmouts;             /* Number of timeouts in a row      */
 
@@ -480,11 +482,11 @@ static int parse_py(char* buf, size_t buflen, char* add_buf, size_t add_buflen) 
   PyObject *py_args, *py_value;
 
   if (py_module != NULL) {
-    py_args = PyTuple_New(2);
+    py_args = PyTuple_New(4);
     py_value = PyByteArray_FromStringAndSize(buf, buflen);
     if (!py_value) {
       Py_DECREF(py_args);
-      fprintf(stderr, "Cannot convert argument\n");
+      fprintf(stderr, "Cannot convert argument 0\n");
       return 0;
     }
 
@@ -493,11 +495,30 @@ static int parse_py(char* buf, size_t buflen, char* add_buf, size_t add_buflen) 
     py_value = PyByteArray_FromStringAndSize(add_buf, add_buflen);
     if (!py_value) {
       Py_DECREF(py_args);
-      fprintf(stderr, "Cannot convert argument\n");
+      fprintf(stderr, "Cannot convert argument 1\n");
       return 0;
     }
 
     PyTuple_SetItem(py_args, 1, py_value);
+
+    // py_value = PyLong_FromUnsignedLongLong(cur_id);
+    py_value = PyLong_FromUnsignedLong((unsigned long)cur_id);
+    if (!py_value) {
+      Py_DECREF(py_args);
+      fprintf(stderr, "Cannot convert argument 2\n");
+      return 0;
+    }
+
+    PyTuple_SetItem(py_args, 2, py_value); // 循环次数
+
+    py_value = PyLong_FromUnsignedLong((unsigned long)queued_discovered);
+    if (!py_value) {
+      Py_DECREF(py_args);
+      fprintf(stderr, "Cannot convert argument 2\n");
+      return 0;
+    }
+
+    PyTuple_SetItem(py_args, 3, py_value); // 循环次数
 
     py_value = PyObject_CallObject(py_functions[PY_FUNC_PARSE], py_args);
 
@@ -8228,7 +8249,12 @@ int main(int argc, char** argv) {
     if (stop_soon) goto stop_fuzzing;
   }
 
+  cur_id = 0;
+  
   while (1) {
+    cur_id++;
+  for(int ii = 1;ii <=2; ii++){
+    
 
     u8 skipped_fuzz;
 
@@ -8278,11 +8304,11 @@ int main(int argc, char** argv) {
         sync_fuzzers(use_argv);
 
     }
-
+  }
     if (!stop_soon && exit_1) stop_soon = 2;
 
     if (stop_soon) break;
-
+  
     queue_cur = queue_cur->next;
     current_entry++;
 

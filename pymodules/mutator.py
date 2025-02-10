@@ -25,6 +25,7 @@ from JavaScriptLexer import JavaScriptLexer as JSL
 from JavaScriptParser import JavaScriptParser as JSP
 from JavaScriptParserVisitor import JavaScriptParserVisitor as JSV
 from JavaScriptParserVisitor2 import JavaScriptParserVisitor2 as JSV2
+import tools,shutil,os
 
 @SetTimeoutDecorator(timeout=10)
 def checkParsetime(buf0):
@@ -39,8 +40,10 @@ def checkParsetime(buf0):
     return True
 
 
-def parse(buf, add_buf):
+def parse(buf, add_buf, cur_id, queued_discovered):
+    print('============================', cur_id, '============================')
     is_done, is_timeout, erro_message, results = checkParsetime(buf)
+    
     if is_timeout == False:
         # 1. clear
         config.ids = []
@@ -174,55 +177,75 @@ def fuzz():
 
 
 if __name__ == '__main__':
-    js1 = '''
-    function opt(a, b) {
-        b[0] = 0;
-        a.length;
+    # js1 = '''
+    # function opt(a, b) {
+    #     b[0] = 0;
+    #     a.length;
 
-        for (let i = 0; i < 1; i++)
-            a[0] = 0;
+    #     for (let i = 0; i < 1; i++)
+    #         a[0] = 0;
 
-        b[0] = 9.431092e-317;
-    }
+    #     b[0] = 9.431092e-317;
+    # }
 
-    let arr1 = new Array(1);
-    arr1[0] = 'a';
-    opt(arr1, [0]);
+    # let arr1 = new Array(1);
+    # arr1[0] = 'a';
+    # opt(arr1, [0]);
 
-    let arr2 = [0.1];
-    opt(arr2, arr2);
+    # let arr2 = [0.1];
+    # opt(arr2, arr2);
 
-    %OptimizeFunctionOnNextCall(opt);
+    # %OptimizeFunctionOnNextCall(opt);
 
-    opt(arr2, arr2);
-    arr2[0].x;
-    '''
-    js2 = '''
-    class Base {
-        constructor() {
-            this.x = 1;
-        }
-    }
-    class Derived extends Base {
-        constructor() {
-            super();
-        }
-    }
-    let bound = Object.bind();
-    Reflect.construct(Derived, [], bound);
-    %OptimizeFunctionOnNextCall(Derived);
-    new Derived();
-    '''
-    length = parse(js1.encode(), js2.encode())
-    print(length)
-    if length > 0:
-        for i in range(0, length):
-        #     with open("/home/b/crossover/custom_mutators/examples/new_samples/"+str(i)+".js", "w") as f:
-        #         f.write(fuzz().decode())
-        #         f.close()
-            print(fuzz().decode())
-            print("=============================")
-
+    # opt(arr2, arr2);
+    # arr2[0].x;
+    # '''
+    # js2 = '''
+    # class Base {
+    #     constructor() {
+    #         this.x = 1;
+    #     }
+    # }
+    # class Derived extends Base {
+    #     constructor() {
+    #         super();
+    #     }
+    # }
+    # let bound = Object.bind();
+    # Reflect.construct(Derived, [], bound);
+    # %OptimizeFunctionOnNextCall(Derived);
+    # new Derived();
+    # '''
+    # length = parse(js1.encode(), js2.encode())
+    # print(length)
+    # if length > 0:
+    #     for i in range(0, length):
+    #     #     with open("/home/b/crossover/custom_mutators/examples/new_samples/"+str(i)+".js", "w") as f:
+    #     #         f.write(fuzz().decode())
+    #     #         f.close()
+    #         print(fuzz().decode())
+    #         print("=============================")
+    directory = "/home/qbtly/Desktop/PatchFuzz/js/seeds/sm/"
+    path = '/home/qbtly/Desktop/aaaaa/c/'
+    shutil.rmtree(path)
+    os.mkdir(path)
+    file5 = tools.select_random_files(directory, num_files=10)
+    i = 1
+    for file in file5:
+        with open(file, 'r') as f:
+            js_content = f.read()
+            f.close()
+        length = parse(js_content.encode(), js_content.encode())
+        print("Total Samples: ", length)
+        
+        if length > 0:
+            pathi = os.path.join(path, str(i))
+            i += 1
+            os.mkdir(pathi)
+            for k in range(0, length):
+                with open(os.path.join(pathi, str(k) + ".js") , "w") as f:
+                    f.write(fuzz().decode())
+                    f.close()
 
 # Uncomment and implement the following methods if you want to use a custom
 # trimming algorithm. See also the documentation for a better API description.
@@ -265,7 +288,7 @@ if __name__ == '__main__':
 #     '''
 #     Called after each trimming operation.
 #
-#     @type success: bool
+#     @type success: bool5
 #     @param success: Indicates if the last trim operation was successful.
 #
 #     @rtype: int

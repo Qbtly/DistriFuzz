@@ -110,6 +110,33 @@ def classify(objs):
     return obj_name8type
 
 
+
+
+def select_random_files(directory, num_files=5):
+    """
+    Selects a random set of files from the specified directory.
+
+    Args:
+    directory (str): The path to the directory from which to select files.
+    num_files (int): The number of random files to select.
+
+    Returns:
+    list: A list of selected file paths.
+    """
+    # Get a list of all files in the directory
+    files = [file for file in os.listdir(directory) if os.path.isfile(os.path.join(directory, file))]
+    
+    # Check if the directory has enough files
+    if len(files) < num_files:
+        raise ValueError("Not enough files in the directory to select from.")
+    
+    # Randomly select files
+    selected_files = random.sample(files, num_files)
+    
+    # Return the full paths of the selected files
+    return [os.path.join(directory, file) for file in selected_files]
+
+
 if __name__ == '__main__':
     names = ['zdy0', 'zdy1']
     for n in range(200):

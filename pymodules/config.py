@@ -106,13 +106,17 @@ builtins = ["Array", "ArrayBuffer", "AggregateError", "apply", "abs", "acos", "a
 "%WasmTierUpFunction", "%IsLiftoffFunction"]
 
 token_size = 200
-sample_size = 2000
+sample_size = 500
 train = False
 
 ids = []
 intervals = {}
 texts = {}
 new_samples = []
+sample = ""
+new_samples_len = 0
+pre_queued_discovered = 0
+use_gpt = False
 
 # train_file_path = "/home/b/zhunki/crossover/pymodules/train.txt"
 # last_original = ""
