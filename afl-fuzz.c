@@ -8253,7 +8253,7 @@ int main(int argc, char** argv) {
   
   while (1) {
     cur_id++;
-  for(int ii = 1;ii <=2; ii++){
+  // for(int ii = 1;ii <=2; ii++){
     
 
     u8 skipped_fuzz;
@@ -8304,7 +8304,7 @@ int main(int argc, char** argv) {
         sync_fuzzers(use_argv);
 
     }
-  }
+  // }
     if (!stop_soon && exit_1) stop_soon = 2;
 
     if (stop_soon) break;
