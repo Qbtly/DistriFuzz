@@ -163,7 +163,7 @@ EXP_ST u32 queued_paths,              /* Total number of queued testcases */
            useless_at_start,          /* Number of useless starting paths */
            var_byte_count,            /* Bitmap bytes with var behavior   */
            current_entry,             /* Current queue entry ID           */
-           havoc_div = 1;             /* Cycle count divisor for havoc    */
+           havoc_div = 1,            /* Cycle count divisor for havoc    */
            cur_id;
 
 EXP_ST u64 total_crashes,             /* Total number of crashes          */
@@ -482,7 +482,7 @@ static int parse_py(char* buf, size_t buflen, char* add_buf, size_t add_buflen) 
   PyObject *py_args, *py_value;
 
   if (py_module != NULL) {
-    py_args = PyTuple_New(4);
+    py_args = PyTuple_New(3);
     py_value = PyByteArray_FromStringAndSize(buf, buflen);
     if (!py_value) {
       Py_DECREF(py_args);
@@ -511,14 +511,14 @@ static int parse_py(char* buf, size_t buflen, char* add_buf, size_t add_buflen) 
 
     PyTuple_SetItem(py_args, 2, py_value); // 循环次数
 
-    py_value = PyLong_FromUnsignedLong((unsigned long)queued_discovered);
-    if (!py_value) {
-      Py_DECREF(py_args);
-      fprintf(stderr, "Cannot convert argument 2\n");
-      return 0;
-    }
+    // py_value = PyLong_FromUnsignedLong((unsigned long)queued_discovered);
+    // if (!py_value) {
+    //   Py_DECREF(py_args);
+    //   fprintf(stderr, "Cannot convert argument 2\n");
+    //   return 0;
+    // }
 
-    PyTuple_SetItem(py_args, 3, py_value); // 循环次数
+    // PyTuple_SetItem(py_args, 3, py_value); // 循环次数
 
     py_value = PyObject_CallObject(py_functions[PY_FUNC_PARSE], py_args);
 

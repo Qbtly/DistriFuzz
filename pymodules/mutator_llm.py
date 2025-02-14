@@ -76,7 +76,7 @@ def llm_mutate(origin_sample):
 samples = []
 
 def parse(buf, add_buf, cur_id):
-    # print('============================', cur_id, '============================')
+    print('============================', cur_id, '============================')
     new_samples = []
     print(buf.decode())
     try:

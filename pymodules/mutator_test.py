@@ -1,5 +1,7 @@
 import ollama
 import re
+import requests
+import json, time
 
 origin_sample = '''
     function opt(a, b) {
@@ -71,13 +73,40 @@ def extract(samples_text):
 
 
 def llm():
-    response = ollama.chat(model='deepseek-r1:70b', messages=messages) # deepseek-r1 codellama
+    # 14d6c3c5.r16.cpolar.top
+    API_URL = "http://172.17.0.1:11434/api/chat"  # 11434 是 Ollama 默认端口
+    response = requests.post(API_URL, json={"model": "deepseek-r1:70b", "messages": messages}, stream=True)
+    # deepseek-r1 codellama
     # print(response['message']["content"])
 
-    clean_response = re.sub(r"<.*?>", "", response['message']["content"])
-    print(clean_response)
-    return clean_response
+    # clean_response = re.sub(r"<.*?>", "", response['message']["content"])
+    # print(response)
+    # return response
+    # 存储完整的回答
+    full_response = ""
+    print(response)
 
+    for line in response.iter_lines():
+        if line:  
+            json_obj = line.decode("utf-8")  
+            # print(json_obj)
+            try:
+                parsed_data = json.loads(json_obj)  
+                # print(parsed_data)
+                content = parsed_data.get("message", {}).get("content", "")
+                full_response += content  
+            except Exception as e:
+                print("Response Error:", e)
+
+    # print("最终回答:", full_response)
+    return full_response
+
+
+start_time = time.time()
 clean_response = llm()
+end_time = time.time()
+elapsed_time = end_time - start_time  # 计算时间差
 
+print(f"Function execution time: {elapsed_time:.4f} seconds")
 extract(clean_response)
+print(f"Function execution time: {elapsed_time:.4f} seconds")
