@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="RemoteTargetsManager">
+    <targets>
+      <target name="xiaofeixie@146.190.90.3:6700" type="ssh/sftp" uuid="22eabcdb-81e5-469c-9426-d69ff4ca1eb6">
+        <config>
+          <option name="projectRootOnTarget" value="/home/xiaofeixie/DistriFuzz" />
+          <option name="serverName" value="xiaofeixie@146.190.90.3:6700 password" />
+        </config>
+      </target>
+    </targets>
+  </component>
+</project>
