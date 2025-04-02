@@ -7,6 +7,32 @@ import signal
 import config
 
 
+def extract_sample(samples_text):
+    # Regular expression to extract code samples between the markers
+    pattern = re.compile(r'```javascript_start(.*?)```javascript_end', re.DOTALL)
+
+    # Extract all samples
+    samples = pattern.findall(samples_text)
+    samples_return = []
+    # Print each extracted sample
+    for i, sample in enumerate(samples, start=1):
+        sample_content = sample.strip()
+        samples_return.append(sample_content)
+        # print("--------------sample {}-------------".format(i))
+        # print(sample_content)
+        # print()
+    return samples_return
+
+def pick_random_pattern(patterns):
+    selected_patterns = []
+
+    for group in patterns:
+        patterns = group.get("patterns", [])
+        if patterns:
+            selected = random.sample(patterns, min(3, len(patterns)))
+            selected_patterns.extend(selected)
+    return selected_patterns
+
 def all_type_text():
     for type in range(0, 86):
         if type == type:

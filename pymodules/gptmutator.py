@@ -19,6 +19,7 @@ import re
 import config
 import ast
 import random
+import vulpattern
 from call_function_with_timeout import SetTimeoutDecorator
 
 api_key = '0c2fecccc4224abcb5b80f6c69a52663'
@@ -60,6 +61,73 @@ def extract(samples_text):
         # print()
     return samples_return
 
+def pick_random_pattern(patterns):
+    selected_patterns = []
+
+    for group in patterns:
+        patterns = group.get("patterns", [])
+        if patterns:
+            selected = random.sample(patterns, min(3, len(patterns)))
+            selected_patterns.extend(selected)
+    return selected_patterns
+
+
+@SetTimeoutDecorator(timeout=30)
+def get_keyvars(origin_sample, patterns):
+    data = {
+        "messages": [
+            {
+             "role": "system",
+             "content": '''
+                你的任务是对 JavaScript 引擎测试样本进行关键变量提取。
+                请先为该样本选取一个合适的漏洞模式（从下面可选的漏洞模式中选择一个最适合的模式），
+                然后从样本中提取出符合所选漏洞模式的关键变量，并为每个关键变量匹配最可能导致的漏洞根因（RootCause）。
+                最后请以 JSON 数组形式输出，每个元素是一个对象，格式如下：
+                {{
+                    "var": "变量名称",
+                    "rootc": "漏洞根因代号（例如 A, B, C, D, E, F）"
+                }}
+
+                可选漏洞模式：{}
+                RootCause 定义：
+                    A: Incorrect Control Flow Handling
+                    B: Incorrect Type Handling
+                    C: Incorrect Data Structure Handling
+                    D: Incorrect Optimization Algorithm
+                    E: Incorrect Resource Management
+
+                请仅输出 JSON 数组，不要输出任何其他内容。
+             '''.format(patterns)
+            },
+            {
+            "role": "user",
+            "content": '''
+                样本：{}，
+                请根据上面的要求，先选取一个合适的漏洞模式，再从样本中提取出符合该模式的关键变量（不超过3个），并为每个关键变量匹配其可能导致的漏洞根因，最后以 JSON 数组形式输出结果。
+            '''.format(origin_sample)
+        }
+        ],
+        # "max_tokens": 100,
+        "temperature": 0.2
+    }
+    print(data["messages"][0]["content"])
+    print(data["messages"][1]["content"])
+    return []
+    try:
+        time.sleep(5)
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        result = response.json()
+        content = result["choices"][0]["message"]["content"]
+        keyvars = ast.literal_eval(content)
+        if isinstance(keyvars, list) and all(isinstance(kv, dict) and "var" in kv and "rootc" in kv for kv in keyvars):
+            return keyvars
+        else:
+            return []
+    except Exception as e:
+        print("Error during key variable extraction:", e)
+        return []
+
 @SetTimeoutDecorator(timeout=30)
 def gpt_getvars(origin_sample):
     print("[gpt_getvars]")
@@ -95,8 +163,52 @@ def gpt_getvars(origin_sample):
 
 
 
+@SetTimeoutDecorator(timeout=30)
+def ai_mutate(origin_sample, keyvar, patterns):
+    data = {
+        "messages": [
+            {
+                "role": "system",
+                "content": "你的任务是对 JavaScript 引擎测试样本进行代码变异。你将接收一个原始样本，以及一个关键变量和若干漏洞模式，请围绕该关键变量，结合最合适的几个漏洞模式进行结构化变异，以生成用于模糊测试的有效样本。"
+            },
+            {
+                "role": "user",
+                "content": '''
+                    样本代码：
+                    {}
 
+                    关键变量：{}
 
+                    可选漏洞模式：
+                    {}
+
+                    生成10个变异样本，每个变异样本需保持原样本逻辑结构的可运行性和测试语义，并尽可能引入与关键变量及漏洞模式相关的变化。
+                    注意：不要附加任何注释或说明,不使用console.log。
+                    注意：每个变异样本都使用```javascript_start和```javascript_end包裹
+                            '''.format(origin_sample, keyvar, patterns)
+            }
+        ],
+        # "max_tokens": 100,
+        "temperature": 0.7,
+    }
+    print(data["messages"][0]["content"])
+    print(data["messages"][1]["content"])
+    return []
+    try:
+        time.sleep(5)
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        result = response.json()
+        content = result["choices"][0]["message"]["content"]
+        mutated_samples = extract(content)
+        if isinstance(mutated_samples, list):
+            return mutated_samples
+        else:
+            return []
+        return new_samples
+    except Exception as e:
+        print("AI变异出错：", e)
+        return []
 
 
 
@@ -105,17 +217,14 @@ def gpt_mutate1(origin_sample, var_dict):
     print('[gpt_mutate1]')
 
     var_name = list(var_dict.keys())[0]
-    # print("==================1===================")
     var_type1 = var_dict[var_name].lower()
-    # print("==================2===================")
     if var_type1 == 'any':
         var_type = var_type1
     else:
         var_type = random.choice(['any',var_type1,var_type1,var_type1])
-    # print("==================3===================")
-    print(var_name,var_type1,var_type)
+    # print(var_name,var_type1,var_type)
     operation = random.choice(operations[var_type])
-    # print("==================4===================")
+
     if var_name == 'anyone':
         var_name = "样本"
     else:
@@ -189,25 +298,9 @@ def gpt_mutate(origin_sample):
 
     return new_samples
 
-def parse(buf, add_buf, cur_id):
+def parse1(buf, add_buf, cur_id):
     print('============================', cur_id, '============================')
     new_samples = []
-    # print(buf)
-    print(buf.decode())
-    # try:
-    #     is_done, is_timeout, erro_message, samples_text = gpt_mutate(buf)
-    #     if is_timeout:
-    #         print("[Timeout]")
-    #         print(erro_message)
-    #     new_samples = extract(samples_text)
-    # except Exception as e:
-    #     print("An error occurred:", e)
-    # for new_sample in new_samples:
-    #     if new_sample not in config.new_samples:
-    #         config.new_samples.append(new_sample)
-    #         if len(config.new_samples) > config.sample_size:
-    #             return len(config.new_samples)
-    
     try:
         is_done, is_timeout, erro_message, vars_list = gpt_getvars(buf.decode())
     except Exception as e:
@@ -218,7 +311,6 @@ def parse(buf, add_buf, cur_id):
         vars_list.append({'anyone':'any'})
     # print(vars_list)
     for var_dict in vars_list:
-        time.sleep(1)
         if vars_list.index(var_dict) > 3:
             break
         try:
@@ -237,6 +329,67 @@ def parse(buf, add_buf, cur_id):
     print(len(config.new_samples))
     return len(config.new_samples)
 
+
+
+def parse(buf, add_buf, cur_id):
+    print('============================', cur_id, '============================')
+    
+    new_samples = []
+    selected_patterns = pick_random_pattern(vulpattern.vul_patterns)
+    try:
+        is_done, is_timeout, erro_message, vars_list = get_keyvars(buf.decode(), selected_patterns)
+        vars_list = [
+    {
+        "var": "obj",
+        "rootc": "D"
+    },
+    {
+        "var": "foo",
+        "rootc": "E"
+    }
+]
+
+    except Exception as e:
+        print("An error occurred:", e)
+        return len(config.new_samples)
+    if not vars_list:
+        print("No key variables extracted.")
+        return len(config.new_samples)
+    
+
+    for var_entry in vars_list:
+        var_name = var_entry.get("var")
+        rootc_code = var_entry.get("rootc")
+        if not var_name or not rootc_code:
+            print("Invalid var_entry:", var_entry)
+            continue
+        # 根据根因类别获取相应的漏洞模式
+        matching_patterns = []
+        for root in vulpattern.vul_patterns:
+            if root.get("RootCause") == vulpattern.RootCause[rootc_code]:
+                matching_patterns = root.get("patterns", [])
+                break
+
+        if not matching_patterns:
+            print(f"No patterns found for root cause {vulpattern.RootCause[rootc_code]}")
+            continue
+        try:
+            is_done, is_timeout, error_message, samples_text = ai_mutate(
+                buf.decode(), var_name, matching_patterns
+            )
+            if is_timeout:
+                print("[Timeout]")
+                print(erro_message)
+            new_samples = extract(samples_text)
+        except Exception as e:
+            print("An error occurred:", e)
+        for new_sample in new_samples:
+            if new_sample not in config.new_samples:
+                config.new_samples.append(new_sample)
+                if len(config.new_samples) > config.sample_size:
+                    return len(config.new_samples)
+    # print(len(config.new_samples))
+    return len(config.new_samples)
 
 def fuzz():
     """
@@ -264,27 +417,10 @@ def fuzz():
 
 if __name__ == '__main__':
     js1 = '''
-    function opt(a, b) {
-        b[0] = 0;
-        a.length;
-
-        for (let i = 0; i < 1; i++)
-            a[0] = 0;
-
-        b[0] = 9.431092e-317;
-    }
-
-    let arr1 = new Array(1);
-    arr1[0] = 'a';
-    opt(arr1, [0]);
-
-    let arr2 = [0.1];
-    opt(arr2, arr2);
-
-    %OptimizeFunctionOnNextCall(opt);
-
-    opt(arr2, arr2);
-    arr2[0].x;
+    let obj = {};
+Object.defineProperty(obj, "foo", {
+    get: () => { return {}; } 
+});
     '''
     js2 = '''
     class Base {
@@ -302,136 +438,14 @@ if __name__ == '__main__':
     %OptimizeFunctionOnNextCall(Derived);
     new Derived();
     '''
-    length = parse(js1.encode(), js2.encode())
+    length = parse(js1.encode(), js2.encode(),1)
     print(length)
-    if length > 0:
-        for i in range(0, length):
-            with open("/home/b/crossover/custom_mutators/examples/new_samples/"+str(i)+".js", "w") as f:
-                f.write(fuzz().decode())
-                f.close()
+    # if length > 0:
+    #     for i in range(0, length):
+    #         with open("/home/b/crossover/custom_mutators/examples/new_samples/"+str(i)+".js", "w") as f:
+    #             f.write(fuzz().decode())
+    #             f.close()
             # print(fuzz().decode())
             # print("=============================")
 
 
-# Uncomment and implement the following methods if you want to use a custom
-# trimming algorithm. See also the documentation for a better API description.
-
-# def init_trim(buf):
-#     '''
-#     Called per trimming iteration.
-#
-#     @type buf: bytearray
-#     @param buf: The buffer that should be trimmed.
-#
-#     @rtype: int
-#     @return: The maximum number of trimming steps.
-#     '''
-#     global ...
-#
-#     # Initialize global variables
-#
-#     # Figure out how many trimming steps are possible.
-#     # If this is not possible for your trimming, you can
-#     # return 1 instead and always return 0 in post_trim
-#     # until you are done (then you return 1).
-#
-#     return steps
-#
-# def trim():
-#     '''
-#     Called per trimming iteration.
-#
-#     @rtype: bytearray
-#     @return: A new bytearray containing the trimmed data.
-#     '''
-#     global ...
-#
-#     # Implement the actual trimming here
-#
-#     return bytearray(...)
-#
-# def post_trim(success):
-#     '''
-#     Called after each trimming operation.
-#
-#     @type success: bool
-#     @param success: Indicates if the last trim operation was successful.
-#
-#     @rtype: int
-#     @return: The next trim index (0 to max number of steps) where max
-#              number of steps indicates the trimming is done.
-#     '''
-#     global ...
-#
-#     if not success:
-#         # Restore last known successful input, determine next index
-#     else:
-#         # Just determine the next index, based on what was successfully
-#         # removed in the last step
-#
-#     return next_index
-#
-# def post_process(buf):
-#     '''
-#     Called just before the execution to write the test case in the format
-#     expected by the target
-#
-#     @type buf: bytearray
-#     @param buf: The buffer containing the test case to be executed
-#
-#     @rtype: bytearray
-#     @return: The buffer containing the test case after
-#     '''
-#     return buf
-#
-# def havoc_mutation(buf, max_size):
-#     '''
-#     Perform a single custom mutation on a given input.
-#
-#     @type buf: bytearray
-#     @param buf: The buffer that should be mutated.
-#
-#     @type max_size: int
-#     @param max_size: Maximum size of the mutated output. The mutation must not
-#         produce data larger than max_size.
-#
-#     @rtype: bytearray
-#     @return: A new bytearray containing the mutated data
-#     '''
-#     return mutated_buf
-#
-# def havoc_mutation_probability():
-#     '''
-#     Called for each `havoc_mutation`. Return the probability (in percentage)
-#     that `havoc_mutation` is called in havoc. Be default it is 6%.
-#
-#     @rtype: int
-#     @return: The probability (0-100)
-#     '''
-#     return prob
-#
-# def queue_get(filename):
-#     '''
-#     Called at the beginning of each fuzz iteration to determine whether the
-#     test case should be fuzzed
-#
-#     @type filename: str
-#     @param filename: File name of the test case in the current queue entry
-#
-#     @rtype: bool
-#     @return: Return True if the custom mutator decides to fuzz the test case,
-#         and False otherwise
-#     '''
-#     return True
-#
-# def queue_new_entry(filename_new_queue, filename_orig_queue):
-#     '''
-#     Called after adding a new test case to the queue
-#
-#     @type filename_new_queue: str
-#     @param filename_new_queue: File name of the new queue entry
-#
-#     @type filename_orig_queue: str
-#     @param filename_orig_queue: File name of the original queue entry
-#     '''
-#     pass

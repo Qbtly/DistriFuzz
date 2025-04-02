@@ -1,0 +1,18 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     afl-gcc
+relocations:
+  - { offsetInCU: 0x26, offset: 0x26, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x0, symBinAddr: 0x100001EEC, symSize: 0x160 }
+  - { offsetInCU: 0x4D, offset: 0x4D, size: 0x8, addend: 0x0, symName: _cc_params, symObjAddr: 0x3BD0, symBinAddr: 0x100008010, symSize: 0x0 }
+  - { offsetInCU: 0x89, offset: 0x89, size: 0x8, addend: 0x0, symName: _be_quiet, symObjAddr: 0x3BC8, symBinAddr: 0x100008008, symSize: 0x0 }
+  - { offsetInCU: 0x9E, offset: 0x9E, size: 0x8, addend: 0x0, symName: _as_path, symObjAddr: 0x3BD8, symBinAddr: 0x100008018, symSize: 0x0 }
+  - { offsetInCU: 0xB3, offset: 0xB3, size: 0x8, addend: 0x0, symName: _clang_mode, symObjAddr: 0x3BE0, symBinAddr: 0x100008020, symSize: 0x0 }
+  - { offsetInCU: 0xC8, offset: 0xC8, size: 0x8, addend: 0x0, symName: _cc_par_cnt, symObjAddr: 0x1FE4, symBinAddr: 0x100008000, symSize: 0x0 }
+  - { offsetInCU: 0xF9, offset: 0xF9, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x0, symBinAddr: 0x100001EEC, symSize: 0x160 }
+  - { offsetInCU: 0x132, offset: 0x132, size: 0x8, addend: 0x0, symName: _find_as, symObjAddr: 0x160, symBinAddr: 0x10000204C, symSize: 0x38C }
+  - { offsetInCU: 0x1F1, offset: 0x1F1, size: 0x8, addend: 0x0, symName: _edit_params, symObjAddr: 0x4EC, symBinAddr: 0x1000023D8, symSize: 0xAD8 }
+  - { offsetInCU: 0x2A1, offset: 0x2A1, size: 0x8, addend: 0x0, symName: _DFL_ck_alloc, symObjAddr: 0xFC4, symBinAddr: 0x100002EB0, symSize: 0x68 }
+  - { offsetInCU: 0x2D7, offset: 0x2D7, size: 0x8, addend: 0x0, symName: _DFL_ck_free, symObjAddr: 0x102C, symBinAddr: 0x100002F18, symSize: 0x1D4 }
+  - { offsetInCU: 0x2FB, offset: 0x2FB, size: 0x8, addend: 0x0, symName: _DFL_ck_strdup, symObjAddr: 0x1200, symBinAddr: 0x1000030EC, symSize: 0x1CC }
+  - { offsetInCU: 0x343, offset: 0x343, size: 0x8, addend: 0x0, symName: _DFL_ck_alloc_nozero, symObjAddr: 0x13CC, symBinAddr: 0x1000032B8, symSize: 0x1A8 }
+...

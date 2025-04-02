@@ -282,6 +282,20 @@ static s8  interesting_8[]  = { INTERESTING_8 };
 static s16 interesting_16[] = { INTERESTING_8, INTERESTING_16 };
 static s32 interesting_32[] = { INTERESTING_8, INTERESTING_16, INTERESTING_32 };
 
+/* Distri */
+typedef struct {
+  u8* buf;
+  size_t len;
+  double fitness;
+  u8* coverage;
+} Individual;
+
+typedef struct {
+  Individual* individuals;
+  int count;
+} Population;
+
+
 /* Fuzzing stages */
 
 enum {
@@ -1631,6 +1645,27 @@ static void read_testcases(void) {
     ck_free(dfn);
 
     add_to_queue(fn, st.st_size, passed_det);
+
+    /* Distri */
+    Population* seed_pop = malloc(sizeof(Population));
+    seed_pop->count = queued_paths; //当前 queue 中的样本数量
+    seed_pop->individuals = ck_alloc(queued_paths * sizeof(Individual)); //为所有个体分配内存
+
+    struct queue_entry* q = queue;
+    int i = 0;
+    while (q) { //导入Population中
+        seed_pop->individuals[i].buf = ck_alloc(q->len);
+        
+        FILE* f = fopen(q->fname, "rb");
+        if (!f) PFATAL("Unable to open %s", q->fname);
+        fread(seed_pop->individuals[i].buf, 1, q->len, f);
+        fclose(f);
+
+        seed_pop->individuals[i].len = q->len;
+        i++;
+        q = q->next;
+    }
+
 
   }
 
