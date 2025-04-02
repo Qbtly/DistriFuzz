@@ -283,18 +283,30 @@ static s16 interesting_16[] = { INTERESTING_8, INTERESTING_16 };
 static s32 interesting_32[] = { INTERESTING_8, INTERESTING_16, INTERESTING_32 };
 
 /* Distri */
+/* A single test case (analogous to a gene in GA). */
 typedef struct {
-  u8* buf;
-  size_t len;
-  double fitness;
-  u8* coverage;
+  /* We'll store the file content. Alternatively, you can store just a path. */
+  uint8_t *data;
+  size_t size;
+  /* We'll store coverage here after each run (copied from trace_bits). */
+  uint8_t* coverage_ptr;
+  uint8_t need_run;
+  char *fname; /* optional: name/path if needed */
+} TestCase;
+
+/* Each Individual has multiple test cases (genes). */
+typedef struct {
+  TestCase *testcases;
+  int tc_count;
+  double fitness; /* We'll store the computed fitness (MMD distance, etc.) */
+  uint8_t** coverage_r;
 } Individual;
 
+/* A population is just an array of individuals. */
 typedef struct {
-  Individual* individuals;
+  Individual *individuals;
   int count;
 } Population;
-
 
 /* Fuzzing stages */
 
@@ -1563,6 +1575,48 @@ static void setup_post(void) {
 
 }
 
+/* Distri */
+
+Individual* build_individual_from_queue() {
+  struct queue_entry* q = queue;
+  int count = queued_paths;
+
+  if (count == 0) return NULL;
+
+  Individual* indiv = ck_alloc(sizeof(Individual));
+  indiv->tc_count = count;
+  indiv->testcases = ck_alloc(sizeof(TestCase) * count);
+  indiv->coverage_r = ck_alloc(sizeof(uint8_t*) * count);
+  indiv->fitness = 0.0;
+
+  int i = 0;
+  while (q) {
+    s32 fd = open(q->fname, O_RDONLY);
+    if (fd < 0) {
+      PFATAL("Unable to open seed file: %s", q->fname);
+    }
+
+    indiv->testcases[i].size = q->len;
+    indiv->testcases[i].data = ck_alloc(q->len);
+    if (read(fd, indiv->testcases[i].data, q->len) != q->len) {
+      PFATAL("Short read from seed file: %s", q->fname);
+    }
+    close(fd);
+
+    indiv->testcases[i].coverage_ptr = ck_alloc(MAP_SIZE);
+    memset(indiv->testcases[i].coverage_ptr, 0, MAP_SIZE);
+    indiv->testcases[i].need_run = 1;
+
+    indiv->testcases[i].fname = ck_strdup(q->fname);  // optional
+    indiv->coverage_r[i] = indiv->testcases[i].coverage_ptr;
+
+    q = q->next;
+    i++;
+  }
+
+  return indiv;
+}
+
 
 /* Read all testcases from the input directory, then queue them for testing.
    Called at startup. */
@@ -1647,26 +1701,13 @@ static void read_testcases(void) {
     add_to_queue(fn, st.st_size, passed_det);
 
     /* Distri */
-    Population* seed_pop = malloc(sizeof(Population));
-    seed_pop->count = queued_paths; //当前 queue 中的样本数量
-    seed_pop->individuals = ck_alloc(queued_paths * sizeof(Individual)); //为所有个体分配内存
+    ACTF("Building initial population from queue...");
+    Individual* seed_individual = build_individual_from_queue();
+    if (!seed_individual || seed_individual->tc_count == 0)
+      FATAL("No valid seeds loaded from AFL queue.");
 
-    struct queue_entry* q = queue;
-    int i = 0;
-    while (q) { //导入Population中
-        seed_pop->individuals[i].buf = ck_alloc(q->len);
-        
-        FILE* f = fopen(q->fname, "rb");
-        if (!f) PFATAL("Unable to open %s", q->fname);
-        fread(seed_pop->individuals[i].buf, 1, q->len, f);
-        fclose(f);
-
-        seed_pop->individuals[i].len = q->len;
-        i++;
-        q = q->next;
-    }
-
-
+    run_individual(seed_individual);  // 执行 dry-run，收集初始覆盖
+    Population* pop = init_population(seed_individual, 20);  // 初始化主种群
   }
 
   free(nl); /* not tracked */

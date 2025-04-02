@@ -40,8 +40,8 @@ def checkParsetime(buf0):
     return True
 
 
-def parse(buf, add_buf, cur_id, queued_discovered):
-    print('============================', cur_id, '============================')
+def parse(buf, add_buf, cur_id):
+    # print('============================', cur_id, '============================')
     is_done, is_timeout, erro_message, results = checkParsetime(buf)
     
     if is_timeout == False:
