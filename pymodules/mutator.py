@@ -14,6 +14,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 @contact:    choller@mozilla.com
 """
 
+import random
 import re
 import config
 from call_function_with_timeout import SetTimeoutDecorator
@@ -43,7 +44,7 @@ def checkParsetime(buf0):
 def parse(buf, add_buf, cur_id):
     # print('============================', cur_id, '============================')
     is_done, is_timeout, erro_message, results = checkParsetime(buf)
-    
+    # print(buf.decode())
     if is_timeout == False:
         # 1. clear
         config.ids = []
@@ -147,8 +148,9 @@ def parse(buf, add_buf, cur_id):
                                 config.new_samples.append(new_sample)
                                 if len(config.new_samples) > config.sample_size:
                                     return len(config.new_samples)
-
-
+    random.shuffle(config.new_samples)
+    # print(len(config.new_samples))
+    # print(config.new_samples)
     return len(config.new_samples)
 
 

@@ -308,6 +308,10 @@ typedef struct {
   int count;
 } Population;
 
+static Population *pop;
+static Individual *seed_individual;
+#define KEEP_SIZE 2
+#define SELECT_SIZE 10
 /* Fuzzing stages */
 
 enum {
@@ -1575,48 +1579,6 @@ static void setup_post(void) {
 
 }
 
-/* Distri */
-
-Individual* build_individual_from_queue() {
-  struct queue_entry* q = queue;
-  int count = queued_paths;
-
-  if (count == 0) return NULL;
-
-  Individual* indiv = ck_alloc(sizeof(Individual));
-  indiv->tc_count = count;
-  indiv->testcases = ck_alloc(sizeof(TestCase) * count);
-  indiv->coverage_r = ck_alloc(sizeof(uint8_t*) * count);
-  indiv->fitness = 0.0;
-
-  int i = 0;
-  while (q) {
-    s32 fd = open(q->fname, O_RDONLY);
-    if (fd < 0) {
-      PFATAL("Unable to open seed file: %s", q->fname);
-    }
-
-    indiv->testcases[i].size = q->len;
-    indiv->testcases[i].data = ck_alloc(q->len);
-    if (read(fd, indiv->testcases[i].data, q->len) != q->len) {
-      PFATAL("Short read from seed file: %s", q->fname);
-    }
-    close(fd);
-
-    indiv->testcases[i].coverage_ptr = ck_alloc(MAP_SIZE);
-    memset(indiv->testcases[i].coverage_ptr, 0, MAP_SIZE);
-    indiv->testcases[i].need_run = 1;
-
-    indiv->testcases[i].fname = ck_strdup(q->fname);  // optional
-    indiv->coverage_r[i] = indiv->testcases[i].coverage_ptr;
-
-    q = q->next;
-    i++;
-  }
-
-  return indiv;
-}
-
 
 /* Read all testcases from the input directory, then queue them for testing.
    Called at startup. */
@@ -1699,15 +1661,6 @@ static void read_testcases(void) {
     ck_free(dfn);
 
     add_to_queue(fn, st.st_size, passed_det);
-
-    /* Distri */
-    ACTF("Building initial population from queue...");
-    Individual* seed_individual = build_individual_from_queue();
-    if (!seed_individual || seed_individual->tc_count == 0)
-      FATAL("No valid seeds loaded from AFL queue.");
-
-    run_individual(seed_individual);  // 执行 dry-run，收集初始覆盖
-    Population* pop = init_population(seed_individual, 20);  // 初始化主种群
   }
 
   free(nl); /* not tracked */
@@ -5161,6 +5114,365 @@ static u8 could_be_interest(u32 old_val, u32 new_val, u8 blen, u8 check_le) {
 
 }
 
+/* Distri */
+// 生成 pop_size 个 Individual
+Population* init_population(Individual* seed, int pop_size) {
+  if (!seed || seed->tc_count == 0) {
+    fprintf(stderr, "[\033[1;31mError\033[0m] init_population: Seed is NULL or empty.\n");
+    return NULL;
+  }
+
+  printf("[\033[1;34mInfo\033[0m] Initializing population of size %d...\n", pop_size);
+
+  Population* pop = ck_alloc(sizeof(Population));
+  pop->count = pop_size;
+  pop->individuals = ck_alloc(sizeof(Individual) * pop_size);
+
+  for (int i = 0; i < pop_size; i++) {
+    printf("  [\033[1;36mIndividual %d\033[0m] Generating testcases...\n", i);
+
+    Individual* ind = &pop->individuals[i];
+    ind->tc_count = seed->tc_count;
+    ind->testcases = ck_alloc(sizeof(TestCase) * ind->tc_count);
+    ind->coverage_r = ck_alloc(sizeof(uint8_t*) * ind->tc_count);
+    ind->fitness = 0.0;
+
+    for (int j = 0; j < seed->tc_count; j++) {
+      TestCase* tc = &ind->testcases[j];
+      char* mutated_data = NULL;
+      size_t mutated_len = 0;
+
+      // 🌱 使用当前 seed testcase 生成一个新样本（parse + fuzz）
+      int parsed = parse_py(
+        (char*)seed->testcases[j].data,
+        seed->testcases[j].size,
+        (char*)seed->testcases[j].data,
+        seed->testcases[j].size
+      );
+
+      if (parsed > 0) {
+        fuzz_py(&mutated_data, &mutated_len);
+      }
+
+      if (!mutated_data || mutated_len == 0) {
+        // fallback: 复制种子数据
+        printf("    [\033[1;33mFallback\033[0m] Testcase %d: Mutation failed, using seed copy.\n", j);
+        mutated_len = seed->testcases[j].size;
+        mutated_data = ck_alloc(mutated_len);
+        memcpy(mutated_data, seed->testcases[j].data, mutated_len);
+      } else {
+        printf("    [\033[1;32mMutated\033[0m] Testcase %d: Generated %zu bytes.\n", j, mutated_len);
+      }
+
+      // 初始化 testcase
+      tc->data = (uint8_t*)mutated_data;
+      tc->size = mutated_len;
+      tc->coverage_ptr = ck_alloc(MAP_SIZE);
+      memset(tc->coverage_ptr, 0, MAP_SIZE);
+      tc->need_run = 1;
+      tc->fname = NULL;
+
+      ind->coverage_r[j] = tc->coverage_ptr;
+    }
+  }
+
+  printf("[\033[1;34mInfo\033[0m] Population initialization complete.\n");
+  return pop;
+}
+
+
+
+Individual* build_individual_from_queue() {
+  struct queue_entry* q = queue;
+  int count = queued_paths;
+
+  if (count == 0) {
+    fprintf(stderr, "[\033[1;31mError\033[0m] AFL queue is empty. Cannot build individual.\n");
+    return NULL;
+  }
+
+  printf("[\033[1;34mInfo\033[0m] Building individual from AFL queue (%d entries)...\n", count);
+
+  Individual* indiv = ck_alloc(sizeof(Individual));
+  indiv->tc_count = count;
+  indiv->testcases = ck_alloc(sizeof(TestCase) * count);
+  indiv->coverage_r = ck_alloc(sizeof(uint8_t*) * count);
+  indiv->fitness = 0.0;
+
+  int i = 0;
+  while (q) {
+    printf("  [\033[1;36mTestcase %d\033[0m] Loading file: %s\n", i, q->fname);
+
+    s32 fd = open(q->fname, O_RDONLY);
+    if (fd < 0) {
+      PFATAL("Unable to open seed file: %s", q->fname);
+    }
+
+    indiv->testcases[i].size = q->len;
+    indiv->testcases[i].data = ck_alloc(q->len);
+    if (read(fd, indiv->testcases[i].data, q->len) != q->len) {
+      PFATAL("Short read from seed file: %s", q->fname);
+    }
+    close(fd);
+
+    indiv->testcases[i].coverage_ptr = ck_alloc(MAP_SIZE);
+    memset(indiv->testcases[i].coverage_ptr, 0, MAP_SIZE);
+    indiv->testcases[i].need_run = 1;
+
+    indiv->testcases[i].fname = ck_strdup(q->fname);  // optional
+    indiv->coverage_r[i] = indiv->testcases[i].coverage_ptr;
+
+    printf("    \033[0;32m✔ Loaded\033[0m (%u bytes)\n", q->len);
+
+    q = q->next;
+    i++;
+  }
+
+  printf("[\033[1;34mInfo\033[0m] Done building individual from queue.\n");
+  return indiv;
+}
+
+
+static void update_virgin_bits(uint8_t* coverage_map, int* new_bits_found) {
+  *new_bits_found = 0;
+  printf("[\033[1;34mUpdateVirgin\033[0m] Checking for new coverage...\n");
+
+  for (int i = 0; i < MAP_SIZE; i++) {
+    if (coverage_map[i]) printf("    [\033[0;90mCheck\033[0m] i=%d, trace=0x%02x, virgin=0x%02x\n",
+      i, coverage_map[i], virgin_bits[i]);
+    // ① 命中了路径，并且该路径仍是 virgin（部分或全部）
+    
+    if (coverage_map[i] & virgin_bits[i]) {
+      printf("    [\033[1;36mHitEdge\033[0m] trace[%d] = 0x%02x, virgin = 0x%02x\n",
+             i, coverage_map[i], virgin_bits[i]);
+
+      // ② 如果是首次命中 virgin（全 0xFF 状态）
+      if (virgin_bits[i] == 0xFF) {
+        *new_bits_found = 1;
+        printf("    [\033[1;32mNewCoverage\033[0m] Discovered new edge(s) at index %d\n", i);
+      }
+
+      // ③ 清除这些路径的 virgin 标志
+      uint8_t before = virgin_bits[i];
+      virgin_bits[i] &= ~coverage_map[i];
+      printf("    [\033[1;33mUpdate\033[0m] virgin_bits[%d]: 0x%02x → 0x%02x\n",
+             i, before, virgin_bits[i]);
+    }
+  }
+}
+
+
+void print_trace_bits() {
+  printf("[\033[1;34mTraceBits\033[0m] Dumping non-zero coverage bytes:");
+  int count = 0;
+  for (int i = 0; i < MAP_SIZE; i++) {
+    if (trace_bits[i] != 0) {
+      count++;
+      // printf("  [\033[1;36m%05d\033[0m] trace_bits[%d] = 0x%02x\n", count++, i, trace_bits[i]);
+    }
+  }
+  if (count == 0) {
+    printf("  \033[1;33m(No coverage recorded — all zero)\033[0m\n");
+  } else {
+    printf("  \033[1;32m%d edge(s) covered\033[0m\n", count);
+  }
+}
+
+void print_virgin_bits() {
+  int count = 0;
+  printf("[\033[1;34mVirginBits\033[0m] Dumping remaining virgin edges:\n");
+  for (int i = 0; i < MAP_SIZE; i++) {
+    if (virgin_bits[i] == 0xFF) {
+      // printf("  [\033[1;36m%05d\033[0m] virgin_bits[%d] = 0xFF\n", count, i);
+      count++;
+    }
+  }
+  if (count == 0) {
+    printf("  \033[1;32mAll edges have been touched at least once.\033[0m 🎉\n");
+  } else {
+    printf("  \033[1;33m%d virgin edge(s) remain\033[0m\n", count);
+  }
+}
+
+
+static void run_individual(Individual* indiv, char** use_argv) {
+  printf("[\033[1;34mInfo\033[0m] Running individual with %d testcases...\n", indiv->tc_count);
+
+  printf("  [\033[1;36mTotal Testcase %d\033[0m] \n", indiv->tc_count);
+  for (int i = 0; i < indiv->tc_count; i++) {
+    TestCase* tc = &indiv->testcases[i];
+
+    printf("  [\033[1;36mTestcase %d\033[0m] ", i);
+
+    if (!tc->need_run) {
+      printf("\033[1;33m[Skipped]\033[0m Already evaluated.\n");
+      indiv->coverage_r[i] = tc->coverage_ptr;
+      continue;
+    }
+
+    // 写入测试样本到 .cur_input
+    write_to_testcase(tc->data, tc->size);
+    printf("→ \033[1;34mExecuting target...\033[0m \n");
+
+    memset(trace_bits, 0, MAP_SIZE);
+    MEM_BARRIER();
+
+    // 执行目标程序
+    s32 fault = run_target(use_argv, exec_tmout);
+
+    // 判断执行结果
+    if (fault != FAULT_NONE) {
+      printf("\033[1;31m[Fault]\033[0m Type = %d\n", fault);
+      memset(tc->coverage_ptr, 0, MAP_SIZE);  // 清空覆盖率
+      indiv->coverage_r[i] = tc->coverage_ptr;
+      continue;
+    }
+
+    print_trace_bits();
+    // print_virgin_bits();
+
+    // 正常执行，拷贝 trace_bits
+    memcpy(tc->coverage_ptr, trace_bits, MAP_SIZE);
+    indiv->coverage_r[i] = tc->coverage_ptr;
+
+
+    tc->need_run = 0;
+  }
+
+  printf("[\033[1;34mInfo\033[0m] Done running individual.\n");
+}
+
+void replace_population(Population* old_pop, Population* new_pop) {
+  // 1. 释放旧种群
+  for (int i = 0; i < old_pop->count; i++) {
+    Individual* indiv = &old_pop->individuals[i];
+    for (int j = 0; j < indiv->tc_count; j++) {
+      ck_free(indiv->testcases[j].data);
+      ck_free(indiv->testcases[j].coverage_ptr);
+    }
+    ck_free(indiv->testcases);
+    ck_free(indiv->coverage_r);
+  }
+  ck_free(old_pop->individuals);
+
+  // 2. 深拷贝新种群
+  old_pop->count = new_pop->count;
+  old_pop->individuals = ck_alloc(sizeof(Individual) * new_pop->count);
+
+  for (int i = 0; i < new_pop->count; i++) {
+    Individual* dst = &old_pop->individuals[i];
+    Individual* src = &new_pop->individuals[i];
+
+    dst->tc_count = src->tc_count;
+    dst->fitness = src->fitness;
+
+    dst->testcases = ck_alloc(sizeof(TestCase) * dst->tc_count);
+    dst->coverage_r = ck_alloc(sizeof(uint8_t*) * dst->tc_count);
+
+    for (int j = 0; j < dst->tc_count; j++) {
+      TestCase* dst_tc = &dst->testcases[j];
+      TestCase* src_tc = &src->testcases[j];
+
+      dst_tc->size = src_tc->size;
+      dst_tc->data = ck_alloc(dst_tc->size);
+      memcpy(dst_tc->data, src_tc->data, dst_tc->size);
+
+      dst_tc->coverage_ptr = ck_alloc(MAP_SIZE);
+      memcpy(dst_tc->coverage_ptr, src_tc->coverage_ptr, MAP_SIZE);
+
+      dst_tc->need_run = src_tc->need_run;
+      dst_tc->fname = NULL; // 可选保留原 fname
+
+      dst->coverage_r[j] = dst_tc->coverage_ptr;
+    }
+  }
+
+  // 3. 释放 new_pop 结构
+  for (int i = 0; i < new_pop->count; i++) {
+    Individual* indiv = &new_pop->individuals[i];
+    for (int j = 0; j < indiv->tc_count; j++) {
+      ck_free(indiv->testcases[j].data);
+      ck_free(indiv->testcases[j].coverage_ptr);
+    }
+    ck_free(indiv->testcases);
+    ck_free(indiv->coverage_r);
+  }
+  ck_free(new_pop->individuals);
+  ck_free(new_pop);
+}
+
+/* Compute MMD distance between two coverage distributions */
+double compute_mmd_distance(uint8_t** coverage1, uint8_t** coverage2, int tc_count) {
+  double dist = 0.0;
+  for (int i = 0; i < MAP_SIZE; i++) {
+    uint64_t sum1 = 0, sum2 = 0;
+    for (int j = 0; j < tc_count; j++) {
+      sum1 += coverage1[j][i];
+      sum2 += coverage2[j][i];
+    }
+    double p = (double)sum1 / tc_count;
+    double q = (double)sum2 / tc_count;
+    dist += (p - q) * (p - q);
+  }
+  return dist;
+}
+
+/* Distri */
+static u8 fuzz_population(Population* pop, char** use_argv) {
+
+  printf("[\033[1;35mGA\033[0m] Starting one generation of fuzz_population with %d individual(s)...\n", pop->count);
+
+  /* 1. Evaluate fitness for each individual */
+  for (int i = 0; i < pop->count; i++) {
+    run_individual(&pop->individuals[i], use_argv);
+    double mmd = compute_mmd_distance(&pop->individuals[i].coverage_r, seed_individual->coverage_r, pop->individuals[i].tc_count);
+    pop->individuals[i].fitness = mmd;
+  }
+
+  /* 2. Sort individuals by descending fitness */
+  for (int i = 0; i < pop->count - 1; i++) {
+    for (int j = i + 1; j < pop->count; j++) {
+      if (pop->individuals[j].fitness > pop->individuals[i].fitness) {
+        Individual tmp = pop->individuals[i];
+        pop->individuals[i] = pop->individuals[j];
+        pop->individuals[j] = tmp;
+      }
+    }
+  }
+
+  /* 3. Replace the bottom half with offspring */
+  for (int i = KEEP_SIZE; i < pop->count; i++) {
+    int p1 = rand() % SELECT_SIZE;
+    int p2 = rand() % SELECT_SIZE;
+    if (p2 == p1) p2 = (p2 + 1) % SELECT_SIZE;
+
+    /* Free old individual */
+    for (int t = 0; t < pop->individuals[i].tc_count; t++) {
+      ck_free(pop->individuals[i].testcases[t].data);
+      ck_free(pop->individuals[i].testcases[t].coverage_ptr);
+    }
+    ck_free(pop->individuals[i].testcases);
+    ck_free(pop->individuals[i].coverage_r);
+
+    // crossover_individuals(&pop->individuals[p1], &pop->individuals[p2], &pop->individuals[i]);
+
+    // /* Mutate child testcases */
+    // for (int t = 0; t < pop->individuals[i].tc_count; t++) {
+    //   if (rand() % 100 < 50) {
+    //     mutate_testcase(&pop->individuals[i].testcases[t]);
+    //   }
+    // }
+
+    pop->individuals[i].fitness = 0.0;
+  }
+
+  printf("[\033[1;35mGA\033[0m] Generation completed.\n");
+  return 0;
+  
+}
+
+
+
 
 /* Take the current entry from the queue, fuzz it for a while. This
    function is a tad too long... returns 0 if fuzzed successfully, 1 if
@@ -8014,6 +8326,8 @@ static void save_cmdline(u32 argc, char** argv) {
 }
 
 
+
+
 #ifndef AFL_LIB
 
 /* Main entry point */
@@ -8315,6 +8629,16 @@ int main(int argc, char** argv) {
   write_stats_file(0, 0, 0);
   save_auto();
 
+
+  /* Distri */
+  ACTF("Building initial population from queue...");
+  seed_individual = build_individual_from_queue();
+  if (!seed_individual || seed_individual->tc_count == 0)
+    FATAL("No valid seeds loaded from AFL queue.");
+
+  run_individual(seed_individual, use_argv);  // 执行 dry-run，收集初始覆盖
+  pop = init_population(seed_individual, 20);  // 初始化主种群
+  
   if (stop_soon) goto stop_fuzzing;
 
   /* Woop woop woop */
@@ -8372,7 +8696,14 @@ int main(int argc, char** argv) {
 
     }
 
-    skipped_fuzz = fuzz_one(use_argv);
+    /* Distri */
+    u8 use_ga_mode = getenv("AFL_GA_MODE") != NULL;
+    if (use_ga_mode) {
+      printf("[\033[1;35mGA Mode\033[0m] Environment variable AFL_GA_MODE detected. Using Genetic Algorithm fuzzing.\n");
+      skipped_fuzz = fuzz_population(pop, use_argv);
+    } else {
+      skipped_fuzz = fuzz_one(use_argv);
+    }
 
     if (!stop_soon && sync_id && !skipped_fuzz) {
       
