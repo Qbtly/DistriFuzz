@@ -173,6 +173,7 @@ def fuzz():
     """
     if len(config.new_samples) > 0:
         sample = config.new_samples.pop(0)
+        # print("pop\n")
     else:
         sample = ""
     return bytearray(sample.encode())
