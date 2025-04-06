@@ -5157,7 +5157,7 @@ void print_individual_preview(Individual* ind, int id, const char* label) {
 }
 
 void print_trace_bits() {
-  printf("[\033[1;34mTraceBits\033[0m] Dumping non-zero coverage bytes:");
+  printf("[\033[1;34mTraceBits\033[0m] Coverage bytes:");
   int count = 0;
   for (int i = 0; i < MAP_SIZE; i++) {
     if (trace_bits[i] != 0) {
@@ -5223,20 +5223,20 @@ Population* init_population(Individual* seed, int pop_size) {
         (char*)seed->testcases[j].data,
         seed->testcases[j].size
       );
-      printf("    [\033[1;33mparse_py\033[0m] Testcase %d.\n", parsed);
+      printf("    [\033[1;33mparse_py\033[0m] Testcase %d generated %d.\n", j, parsed);
 
       if (parsed > 0) {
         fuzz_py(&mutated_data0, &mutated_len0);
       }
 
       if (!mutated_data0 || mutated_len0 == 0) {
-        // fallback: 复制种子数据
-        printf("    [\033[1;33mFallback\033[0m] Testcase %d: Mutation failed, using seed copy.\n", j);
+        // 复制种子数据
+        // printf("    [\033[1;33mFallback\033[0m] Testcase %d: Mutation failed, using seed copy.\n", j);
         mutated_len = seed->testcases[j].size;
         mutated_data = ck_alloc(mutated_len);
         memcpy(mutated_data, seed->testcases[j].data, mutated_len);
       } else {
-        printf("    [\033[1;32mMutated\033[0m] Testcase %d: Generated %zu bytes.\n", j, mutated_len0);
+        // printf("    [\033[1;32mMutated\033[0m] Testcase %d: Generated %zu bytes.\n", j, mutated_len0);
         mutated_len = mutated_len0;
         mutated_data = ck_alloc(mutated_len);
         memcpy(mutated_data, mutated_data0, mutated_len);
@@ -5254,11 +5254,11 @@ Population* init_population(Individual* seed, int pop_size) {
     }
   }
 
-  printf("[\033[1;34mInfo\033[0m] Dumping created population content...\n");
+  // printf("[\033[1;34mInfo\033[0m] Dumping created population content...\n");
   
-  for (int i = 0; i < pop->count; i++) {
-    print_individual_preview(&pop->individuals[i], i, "Init");
-  }
+  // for (int i = 0; i < pop->count; i++) {
+  //   print_individual_preview(&pop->individuals[i], i, "Init");
+  // }
   // getchar();
   printf("[\033[1;34mInfo\033[0m] Population initialization complete.\n");
   return pop;
@@ -5283,7 +5283,7 @@ Individual* build_individual_from_queue() {
 
   int i = 0;
   while (q) {
-    printf("  [\033[1;36mTestcase %d\033[0m] Loading file: %s\n", i, q->fname);
+    // printf("  [\033[1;36mTestcase %d\033[0m] Loading file: %s\n", i, q->fname);
 
     s32 fd = open(q->fname, O_RDONLY);
     if (fd < 0) {
@@ -5304,7 +5304,7 @@ Individual* build_individual_from_queue() {
     indiv->testcases[i].fname = ck_strdup(q->fname);  // optional
     indiv->coverage_r[i] = indiv->testcases[i].coverage_ptr;
 
-    printf("    \033[0;32m✔ Loaded\033[0m (%u bytes)\n", q->len);
+    // printf("    \033[0;32m✔ Loaded\033[0m (%u bytes)\n", q->len);
 
     q = q->next;
     i++;
@@ -5316,9 +5316,9 @@ Individual* build_individual_from_queue() {
 
 
 static void run_individual(Individual* indiv, char** use_argv) {
-  printf("[\033[1;34mInfo\033[0m] Running individual with %d testcases...\n", indiv->tc_count);
+  // printf("[\033[1;34mInfo\033[0m] Running individual with %d testcases...\n", indiv->tc_count);
 
-  printf("  [\033[1;36mTotal Testcase %d\033[0m] \n", indiv->tc_count);
+  // printf("  [\033[1;36mTotal Testcase %d\033[0m] \n", indiv->tc_count);
   for (int i = 0; i < indiv->tc_count; i++) {
     TestCase* tc = &indiv->testcases[i];
 
@@ -5332,7 +5332,7 @@ static void run_individual(Individual* indiv, char** use_argv) {
 
     // 写入测试样本到 .cur_input
     write_to_testcase(tc->data, tc->size);
-    printf("→ \033[1;34mExecuting target...\033[0m \n");
+    printf("→ \033[1;34mExecuting target...\033[0m ");
 
     memset(trace_bits, 0, MAP_SIZE);
     MEM_BARRIER();
@@ -5359,7 +5359,7 @@ static void run_individual(Individual* indiv, char** use_argv) {
     tc->need_run = 0;
   }
 
-  printf("[\033[1;34mInfo\033[0m] Done running individual.\n");
+  // printf("[\033[1;34mInfo\033[0m] Done running individual.\n");
 }
 
 /* Compute MMD distance between two coverage distributions */
@@ -5389,7 +5389,7 @@ void crossover_individuals(Individual* p1, Individual* p2, Individual* child) {
   child->coverage_r = ck_alloc(sizeof(uint8_t*) * child->tc_count);
   child->fitness = 0.0;
 
-  printf("[\033[1;36mCrossOver\033[0m] Creating child from crossover of %d testcases...\n", child->tc_count);
+  // printf("[\033[1;36mCrossOver\033[0m] Creating child from crossover of %d testcases...\n", child->tc_count);
 
   for (int i = 0; i < child->tc_count; i++) {
     TestCase* dst = &child->testcases[i];
@@ -5426,16 +5426,16 @@ void crossover_individuals(Individual* p1, Individual* p2, Individual* child) {
     printf("\n");
   }
 
-  printf("[\033[1;36mCrossOver\033[0m] Child generation complete.\n");
+  // printf("[\033[1;36mCrossOver\033[0m] Child generation complete.\n");
 }
 
 void mutate_testcase(TestCase* tc) {
   if (!tc || !tc->data || tc->size == 0) {
-    fprintf(stderr, "[\033[1;31mError\033[0m] mutate_testcase: Invalid testcase.\n");
+    fprintf(stderr, "[\033[  1;31mError\033[0m] mutate_testcase: Invalid testcase.\n");
     return;
   }
 
-  printf("  [\033[1;34mMutate\033[0m] Starting mutation for testcase of size %zu bytes...\n", tc->size);
+  // printf("  [\033[1;34mMutate\033[0m] Starting mutation for testcase of size %zu bytes...\n", tc->size);
 
   char* mutated_data = NULL;
   size_t mutated_len = 0;
@@ -5445,21 +5445,21 @@ void mutate_testcase(TestCase* tc) {
                         (char*)tc->data, tc->size);
 
   if (parsed > 0) {
-    printf("  [\033[1;36mParseOK\033[0m] parse_py returned %d. Proceeding with fuzz_py...\n", parsed);
+    // printf("  [\033[1;36mParseOK\033[0m] parse_py returned %d. Proceeding with fuzz_py...\n", parsed);
     fuzz_py(&mutated_data, &mutated_len);
   } else {
     printf("  [\033[1;33mParseFail\033[0m] parse_py returned %d. Skipping fuzz_py.\n", parsed);
   }
 
   if (!mutated_data || mutated_len == 0) {
-    printf("  [\033[1;33mMutateFallback\033[0m] fuzz_py failed or returned empty data. Keeping original.\n");
+    // printf("  [\033[1;33mMutateFallback\033[0m] fuzz_py failed or returned empty data. Keeping original.\n");
     return;
   }
 
-  printf("  [\033[1;32mMutateOK\033[0m] Generated mutated data of %zu bytes. Replacing original testcase.\n", mutated_len);
+  // printf("  [\033[1;32mMutateOK\033[0m] Generated mutated data of %zu bytes. Replacing original testcase.\n", mutated_len);
 
   // 替换当前 TestCase 的数据
-  printf("  [\033[0;31mFree\033[0m] Freeing original testcase data (%p, %zu bytes)...\n", tc->data, tc->size);
+  // printf("  [\033[0;31mFree\033[0m] Freeing original testcase data (%p, %zu bytes)...\n", tc->data, tc->size);
   ck_free(tc->data);
 
   tc->data = (uint8_t*)ck_alloc(mutated_len);
@@ -5503,23 +5503,23 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
 
   /* 3. Replace the bottom half with offspring */
   // 替换当前种群中排名较低的个体（劣等个体），为下一代腾出位置。
-  for (int i = KEEP_SIZE; i < pop->count; i++) { //从第 KEEP_SIZE 个开始是要被替换掉的个体
+  for (int i = 10; i < pop->count; i++) { //从第 KEEP_SIZE 个开始是要被替换掉的个体
     int p1 = rand() % SELECT_SIZE;
     int p2 = rand() % SELECT_SIZE;
-    if (p2 == p1) p2 = (p2 + 1) % SELECT_SIZE; // 如果两个父代一样，强制让 p2 不等于 p1，避免自交。
+    if (p2 == p1) p2 = (p2 + 1) % SELECT_SIZE; // 避免两个父代一样。
 
     printf("[\033[1;36mRegen\033[0m] Replacing individual %d using parents %d and %d\n", i, p1, p2);
 
     /* Free old individual */ 
     // 清理旧个体的资源
-    printf("    [\033[0;31mFree\033[0m] Releasing testcases and coverage_r arrays\n");
+    // printf("    [\033[0;31mFree\033[0m] Releasing testcases and coverage_r arrays\n");
     destroy_individual(&pop->individuals[i]);
 
     /* Crossover */
     printf("[\033[1;36mCrossover\033[0m] Creating new individual %d from parent %d and %d\n", i, p1, p2);
-    // 打印 parent1 的 testcases
-    print_individual_preview(&pop->individuals[p1], p1, "Parent");
-    print_individual_preview(&pop->individuals[p2], p2, "Parent");
+    // 打印 parent 的 testcases
+    // print_individual_preview(&pop->individuals[p1], p1, "Parent");
+    // print_individual_preview(&pop->individuals[p2], p2, "Parent");
 
     crossover_individuals(&pop->individuals[p1], &pop->individuals[p2], &pop->individuals[i]);
 
@@ -5527,12 +5527,13 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
     printf("[\033[1;33mMutation\033[0m] Mutating new individual %d\n", i);
     for (int t = 0; t < pop->individuals[i].tc_count; t++) {
       if (rand() % 100 < 50) {
-        printf("    [\033[1;35mMutate\033[0m] Testcase %d: Applying mutation\n", t);
+        // printf("    [\033[1;35mMutate\033[0m] Testcase %d: Applying mutation\n", t);
         mutate_testcase(&pop->individuals[i].testcases[t]);
         // getchar();
-      } else {
-        printf("    [\033[0;90mSkip\033[0m] Testcase %d: Skipping mutation\n", t);
-      }
+      } 
+      // else {
+      //   printf("    [\033[0;90mSkip\033[0m] Testcase %d: Skipping mutation\n", t);
+      // }
     }
 
     pop->individuals[i].fitness = 0.0;

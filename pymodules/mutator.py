@@ -65,7 +65,7 @@ def parse(buf, add_buf, cur_id):
         parser1.removeErrorListeners()
         parser1.addErrorListener(ConsoleErrorListener())
         tree1 = parser1.program()
-        if parser1.getNumberOfSyntaxErrors() > 0:
+        if parser1.getNumberOfSyntaxErrors() > 0 and parser1.getNumberOfSyntaxErrors() <= 0:
             print("NumberOfSyntaxErrors: " + str(parser1.getNumberOfSyntaxErrors()))
             return 0
         else:

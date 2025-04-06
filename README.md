@@ -25,6 +25,8 @@ sudo apt install libicu-dev
 export AFL_SKIP_CRASHES=1
 
 AFL_PYTHON_MODULE="mutator" PYTHONPATH=./pymodules/ ./afl-fuzz -S jsc -m 4G -t 800+ -i /home/b/js_poc/jsc/ -o /home/b/jsc_out/ /home/b/WebKit/1212/JSCOnly/Release/bin/jsc @@
+
+AFL_SKIP_CRASHES=1 AFL_GA_MODE=1 AFL_PYTHON_MODULE="mutator" PYTHONPATH="/home/qq/DistriFuzz/pymodules/" ./afl-fuzz -m 4G -S 1 -t 1000+ -i ~/js_poc/jerryscript/ -o ~/out -- ~/jerryscript/sp/bin/jerry @@
 ```
 
 ## get and compile v8 on Ubuntu
