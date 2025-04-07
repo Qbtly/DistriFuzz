@@ -94,9 +94,15 @@ def parse(buf, add_buf, cur_id):
             # 4. crossover
             rewriter = TokenStreamRewriter(tokens=stream1)
 
-            for type in range(0, 143):
-                for interval in config.intervals[type]:
-                    for text in config.texts[type]:
+            if True:
+                for _ in range(300):
+                    type = random.randint(0, 142)
+                    if config.intervals[type] and config.texts[type]:
+                        interval = random.choice(config.intervals[type])
+                        text = random.choice(config.texts[type])
+            # for type in range(0, 143):
+                # for interval in config.intervals[type]:
+                #     for text in config.texts[type]:
                         # 5. adjust
                         text = " "+text+" "
                         prefix = rewriter.getText("", 0, interval[0])

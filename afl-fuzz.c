@@ -45,6 +45,7 @@
 #include <termios.h>
 #include <dlfcn.h>
 #include <sched.h>
+#include <stdbool.h>
 
 #include <sys/wait.h>
 #include <sys/time.h>
@@ -310,8 +311,10 @@ typedef struct {
 
 static Population *pop;
 static Individual *seed_individual;
-#define KEEP_SIZE 2
-#define SELECT_SIZE 10
+#define POP_SIZE 10
+#define KEEP_SIZE 5
+#define SELECT_SIZE (POP_SIZE / 2)
+
 /* Fuzzing stages */
 
 enum {
@@ -5118,7 +5121,7 @@ static u8 could_be_interest(u32 old_val, u32 new_val, u8 blen, u8 check_le) {
 // 生成 pop_size 个 Individual
 
 void destroy_individual(Individual* ind) {
-  printf("[Free] Freed individual with %d testcases.\n", ind->tc_count);
+  // printf("[Free] Freed individual with %d testcases.\n", ind->tc_count);
   if (!ind) return;
   for (int i = 0; i < ind->tc_count; i++) {
     ck_free(ind->testcases[i].data);
@@ -5156,6 +5159,22 @@ void print_individual_preview(Individual* ind, int id, const char* label) {
   }
 }
 
+void print_testcase_preview(int index, int parent_id, TestCase* tc) {
+  if (!tc || !tc->data) {
+    printf("  [\033[0;35mTestcase %d\033[0m] From Parent %d | Invalid testcase\n", index, parent_id);
+    return;
+  }
+
+  int preview_len = (tc->size < 8) ? tc->size : 8;
+  printf("  [\033[0;35mTestcase %d\033[0m] From Parent %d | Size: %zu | First bytes: ", index, parent_id, tc->size);
+  for (int b = 0; b < preview_len; b++) {
+    printf("%02X ", (unsigned char)tc->data[b]);
+  }
+  if (tc->size > preview_len) printf("...");
+  printf("\n");
+}
+
+
 void print_trace_bits() {
   printf("[\033[1;34mTraceBits\033[0m] Coverage bytes:");
   int count = 0;
@@ -5188,7 +5207,72 @@ void print_virgin_bits() {
   }
 }
 
-Population* init_population(Individual* seed, int pop_size) {
+/* Compute MMD distance between two coverage distributions */
+double compute_mmd_distance(uint8_t** coverage1, uint8_t** coverage2, int tc_count) {
+  double dist = 0.0;
+  for (int i = 0; i < MAP_SIZE; i++) {
+    uint64_t sum1 = 0, sum2 = 0;
+    for (int j = 0; j < tc_count; j++) {
+      sum1 += coverage1[j][i];
+      sum2 += coverage2[j][i];
+    }
+    double p = (double)sum1 / tc_count;
+    double q = (double)sum2 / tc_count;
+    dist += (p - q) * (p - q);
+  }
+  return dist;
+}
+
+static void run_individual(Individual* indiv, char** use_argv) {
+  // printf("[\033[1;34mInfo\033[0m] Running individual with %d testcases...\n", indiv->tc_count);
+
+  // printf("  [\033[1;36mTotal Testcase %d\033[0m] \n", indiv->tc_count);
+  for (int i = 0; i < indiv->tc_count; i++) {
+    TestCase* tc = &indiv->testcases[i];
+
+    // printf("  [\033[1;36mTestcase %d\033[0m] ", i);
+
+    if (!tc->need_run) {
+      // printf("  [\033[1;36mTestcase %d\033[0m] \033[1;33m[Skipped]\033[0m Already evaluated.\n", i);
+      indiv->coverage_r[i] = tc->coverage_ptr;
+      continue;
+    }
+
+    // 写入测试样本到 .cur_input
+    write_to_testcase(tc->data, tc->size);
+    // printf("  [\033[1;36mTestcase %d\033[0m] → \033[1;34mExecuting target...\033[0m ", i);
+
+    memset(trace_bits, 0, MAP_SIZE);
+    MEM_BARRIER();
+
+    // 执行目标程序
+    s32 fault = run_target(use_argv, exec_tmout);
+
+    // 判断执行结果
+    if (fault != FAULT_NONE) {
+      printf("\033[1;31m[Fault]\033[0m Type = %d\n", fault);
+      memset(tc->coverage_ptr, 0, MAP_SIZE);  // 清空覆盖率
+      indiv->coverage_r[i] = tc->coverage_ptr;
+      continue;
+    }
+
+    // print_trace_bits();
+    // print_virgin_bits();
+
+    // 正常执行，拷贝 trace_bits
+    memcpy(tc->coverage_ptr, trace_bits, MAP_SIZE);
+    indiv->coverage_r[i] = tc->coverage_ptr;
+    tc->need_run = 0;
+  }
+  // 计算并记录 fitness 值
+  double mmd = compute_mmd_distance(indiv->coverage_r, seed_individual->coverage_r, indiv->tc_count);
+  indiv->fitness = mmd;
+  printf("[\033[1;32mFitness\033[0m] Individual fitness = %.4f\n", mmd);
+
+  // printf("[\033[1;34mInfo\033[0m] Done running individual.\n");
+}
+
+Population* init_population(Individual* seed, int pop_size, char** use_argv) {
   if (!seed || seed->tc_count == 0) {
     fprintf(stderr, "[\033[1;31mError\033[0m] init_population: Seed is NULL or empty.\n");
     return NULL;
@@ -5215,23 +5299,23 @@ Population* init_population(Individual* seed, int pop_size) {
       size_t mutated_len = 0;
       char* mutated_data0 = NULL;
       size_t mutated_len0 = 0;
-
+      int rand_idx = rand() % seed->tc_count;
       // 🌱 使用当前 seed testcase 生成一个新样本（parse + fuzz）
       int parsed = parse_py(
         (char*)seed->testcases[j].data,
         seed->testcases[j].size,
-        (char*)seed->testcases[j].data,
-        seed->testcases[j].size
+        (char*)seed->testcases[rand_idx].data,
+        seed->testcases[rand_idx].size
       );
       printf("    [\033[1;33mparse_py\033[0m] Testcase %d generated %d.\n", j, parsed);
 
-      if (parsed > 0) {
+      if (parsed > 1) {
         fuzz_py(&mutated_data0, &mutated_len0);
       }
 
       if (!mutated_data0 || mutated_len0 == 0) {
         // 复制种子数据
-        // printf("    [\033[1;33mFallback\033[0m] Testcase %d: Mutation failed, using seed copy.\n", j);
+        printf("    [\033[1;33mFallback\033[0m] Testcase %d: Mutation failed, using seed copy.\n", j);
         mutated_len = seed->testcases[j].size;
         mutated_data = ck_alloc(mutated_len);
         memcpy(mutated_data, seed->testcases[j].data, mutated_len);
@@ -5252,6 +5336,7 @@ Population* init_population(Individual* seed, int pop_size) {
 
       ind->coverage_r[j] = tc->coverage_ptr;
     }
+    run_individual(ind, use_argv);
   }
 
   // printf("[\033[1;34mInfo\033[0m] Dumping created population content...\n");
@@ -5315,69 +5400,6 @@ Individual* build_individual_from_queue() {
 }
 
 
-static void run_individual(Individual* indiv, char** use_argv) {
-  // printf("[\033[1;34mInfo\033[0m] Running individual with %d testcases...\n", indiv->tc_count);
-
-  // printf("  [\033[1;36mTotal Testcase %d\033[0m] \n", indiv->tc_count);
-  for (int i = 0; i < indiv->tc_count; i++) {
-    TestCase* tc = &indiv->testcases[i];
-
-    printf("  [\033[1;36mTestcase %d\033[0m] ", i);
-
-    if (!tc->need_run) {
-      printf("\033[1;33m[Skipped]\033[0m Already evaluated.\n");
-      indiv->coverage_r[i] = tc->coverage_ptr;
-      continue;
-    }
-
-    // 写入测试样本到 .cur_input
-    write_to_testcase(tc->data, tc->size);
-    printf("→ \033[1;34mExecuting target...\033[0m ");
-
-    memset(trace_bits, 0, MAP_SIZE);
-    MEM_BARRIER();
-
-    // 执行目标程序
-    s32 fault = run_target(use_argv, exec_tmout);
-
-    // 判断执行结果
-    if (fault != FAULT_NONE) {
-      printf("\033[1;31m[Fault]\033[0m Type = %d\n", fault);
-      memset(tc->coverage_ptr, 0, MAP_SIZE);  // 清空覆盖率
-      indiv->coverage_r[i] = tc->coverage_ptr;
-      continue;
-    }
-
-    print_trace_bits();
-    // print_virgin_bits();
-
-    // 正常执行，拷贝 trace_bits
-    memcpy(tc->coverage_ptr, trace_bits, MAP_SIZE);
-    indiv->coverage_r[i] = tc->coverage_ptr;
-
-
-    tc->need_run = 0;
-  }
-
-  // printf("[\033[1;34mInfo\033[0m] Done running individual.\n");
-}
-
-/* Compute MMD distance between two coverage distributions */
-double compute_mmd_distance(uint8_t** coverage1, uint8_t** coverage2, int tc_count) {
-  double dist = 0.0;
-  for (int i = 0; i < MAP_SIZE; i++) {
-    uint64_t sum1 = 0, sum2 = 0;
-    for (int j = 0; j < tc_count; j++) {
-      sum1 += coverage1[j][i];
-      sum2 += coverage2[j][i];
-    }
-    double p = (double)sum1 / tc_count;
-    double q = (double)sum2 / tc_count;
-    dist += (p - q) * (p - q);
-  }
-  return dist;
-}
-
 void crossover_individuals(Individual* p1, Individual* p2, Individual* child) {
   if (!p1 || !p2 || !child || p1->tc_count != p2->tc_count) {
     fprintf(stderr, "[\033[1;31mError\033[0m] Invalid parents or mismatched testcase count.\n");
@@ -5411,44 +5433,36 @@ void crossover_individuals(Individual* p1, Individual* p2, Individual* child) {
     dst->coverage_ptr = ck_alloc(MAP_SIZE);
     memset(dst->coverage_ptr, 0, MAP_SIZE);
 
-    dst->need_run = 1;
+    dst->need_run = 0;
     dst->fname = NULL;
     child->coverage_r[i] = dst->coverage_ptr;
 
-    // 输出源数据和 child 内容
-    int preview_len = (src->size < 8) ? src->size : 8;
-
-    printf("  [\033[0;35mTestcase %d\033[0m] From Parent %d | Size: %zu | First bytes: ", i, chosen_parent, src->size);
-    for (int b = 0; b < preview_len; b++) {
-      printf("%02X ", (unsigned char)src->data[b]);
-    }
-    if (src->size > preview_len) printf("...");
-    printf("\n");
+    //输出源数据和 child 内容
+    // print_testcase_preview(i, chosen_parent, src);
   }
 
   // printf("[\033[1;36mCrossOver\033[0m] Child generation complete.\n");
 }
 
-void mutate_testcase(TestCase* tc) {
+void mutate_testcase(TestCase* tc, TestCase* tc2) {
   if (!tc || !tc->data || tc->size == 0) {
-    fprintf(stderr, "[\033[  1;31mError\033[0m] mutate_testcase: Invalid testcase.\n");
+    fprintf(stderr, "    [\033[0;31mError\033[0m] mutate_testcase: Invalid testcase.\n");
     return;
   }
-
+  tc->need_run = 1;
   // printf("  [\033[1;34mMutate\033[0m] Starting mutation for testcase of size %zu bytes...\n", tc->size);
 
   char* mutated_data = NULL;
   size_t mutated_len = 0;
 
-  // 调用 parse_py 更新 Python 模块状态
-  int parsed = parse_py((char*)tc->data, tc->size,
-                        (char*)tc->data, tc->size);
-
-  if (parsed > 0) {
+  
+  int attempts = 3;
+  while (attempts-- > 0) {
+    int parsed = parse_py((char*)tc->data, tc->size,
+    (char*)tc2->data, tc2->size);
     // printf("  [\033[1;36mParseOK\033[0m] parse_py returned %d. Proceeding with fuzz_py...\n", parsed);
     fuzz_py(&mutated_data, &mutated_len);
-  } else {
-    printf("  [\033[1;33mParseFail\033[0m] parse_py returned %d. Skipping fuzz_py.\n", parsed);
+    if (mutated_data && mutated_len > 0) break;
   }
 
   if (!mutated_data || mutated_len == 0) {
@@ -5469,8 +5483,46 @@ void mutate_testcase(TestCase* tc) {
   // printf("  [\033[0;31mFree\033[0m] Freeing fuzz_py malloc result (%p, %zu bytes)...\n", mutated_data, mutated_len);
   // ck_free(mutated_data);  // fuzz_py 用 malloc 分配的
 
-  printf("  [\033[1;32mMutated\033[0m] Testcase successfully mutated. New size = %zu bytes.\n", mutated_len);
+  // printf("  [\033[1;32mMutated\033[0m] Testcase successfully mutated. New size = %zu bytes.\n", mutated_len);
 }
+
+Individual clone_individual(const Individual* src) {
+  printf("[Clone] Cloning individual with %d testcases...\n", src->tc_count);
+  Individual clone;
+  clone.tc_count = src->tc_count;
+  clone.fitness = src->fitness;
+
+  // 分配 testcase 和 coverage_r 空间
+  clone.testcases = ck_alloc(sizeof(TestCase) * clone.tc_count);
+  clone.coverage_r = ck_alloc(sizeof(uint8_t*) * clone.tc_count);
+
+  for (int i = 0; i < clone.tc_count; i++) {
+    const TestCase* s_tc = &src->testcases[i];
+    TestCase* d_tc = &clone.testcases[i];
+
+    d_tc->size = s_tc->size;
+    d_tc->data = ck_alloc(d_tc->size);
+    memcpy(d_tc->data, s_tc->data, d_tc->size);
+
+    d_tc->coverage_ptr = ck_alloc(MAP_SIZE);
+    memcpy(d_tc->coverage_ptr, s_tc->coverage_ptr, MAP_SIZE);
+
+    d_tc->need_run = s_tc->need_run;
+
+    if (s_tc->fname) {
+      size_t fname_len = strlen(s_tc->fname) + 1;
+      d_tc->fname = ck_alloc(fname_len);
+      memcpy(d_tc->fname, s_tc->fname, fname_len);
+    } else {
+      d_tc->fname = NULL;
+    }
+
+    clone.coverage_r[i] = d_tc->coverage_ptr;
+  }
+
+  return clone;
+}
+
 
 
 /* Distri */
@@ -5478,66 +5530,168 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
 
   printf("[\033[1;35mGA\033[0m] Starting one generation of fuzz_population with %d individual(s)...\n", pop->count);
 
-  /* 1. Evaluate fitness for each individual */
-  for (int i = 0; i < pop->count; i++) {
-    printf("[\033[1;34mEval\033[0m] Running individual %d...\n", i);
-    run_individual(&pop->individuals[i], use_argv);
-    double mmd = compute_mmd_distance(pop->individuals[i].coverage_r, seed_individual->coverage_r, pop->individuals[i].tc_count);
-    pop->individuals[i].fitness = mmd;
-    printf("[\033[1;32mFitness\033[0m] Individual %d fitness = %.4f\n", i, mmd);
-  }
+  // /* 1. Evaluate fitness for each individual */
+  // for (int i = 0; i < pop->count; i++) {
+  //   printf("[\033[1;34mEval\033[0m] Running individual %d...\n", i);
+  //   run_individual(&pop->individuals[i], use_argv);
+  // }
 
-  /* 2. Sort individuals by descending fitness */
-  printf("[\033[1;34mSort\033[0m] Sorting individuals by fitness...\n");
-  for (int i = 0; i < pop->count - 1; i++) {
-    for (int j = i + 1; j < pop->count; j++) {
-      if (pop->individuals[j].fitness > pop->individuals[i].fitness) {
-        // printf("[\033[1;33mSwap\033[0m] Swapping individual %d (%.4f) with %d (%.4f)\n",
-        //        i, pop->individuals[i].fitness, j, pop->individuals[j].fitness);
-        Individual tmp = pop->individuals[i];
-        pop->individuals[i] = pop->individuals[j];
-        pop->individuals[j] = tmp;
-      }
-    }
-  } // “更大的个体”被一步步冒泡到前面
+  // /* 2. Sort individuals by descending fitness */
+  // printf("[\033[1;34mSort\033[0m] Sorting individuals by fitness...\n");
+  // for (int i = 0; i < pop->count - 1; i++) {
+  //   for (int j = i + 1; j < pop->count; j++) {
+  //     if (pop->individuals[j].fitness > pop->individuals[i].fitness) {
+  //       // printf("[\033[1;33mSwap\033[0m] Swapping individual %d (%.4f) with %d (%.4f)\n",
+  //       //        i, pop->individuals[i].fitness, j, pop->individuals[j].fitness);
+  //       Individual tmp = pop->individuals[i];
+  //       pop->individuals[i] = pop->individuals[j];
+  //       pop->individuals[j] = tmp;
+  //     }
+  //   }
+  // } // “更大的个体”被一步步冒泡到前面
 
-  /* 3. Replace the bottom half with offspring */
-  // 替换当前种群中排名较低的个体（劣等个体），为下一代腾出位置。
-  for (int i = 10; i < pop->count; i++) { //从第 KEEP_SIZE 个开始是要被替换掉的个体
-    int p1 = rand() % SELECT_SIZE;
-    int p2 = rand() % SELECT_SIZE;
-    if (p2 == p1) p2 = (p2 + 1) % SELECT_SIZE; // 避免两个父代一样。
+  /* 3. Generate offspring and collect them */
+  int offspring_count = pop->count - KEEP_SIZE;
+  Individual* offspring = ck_alloc(sizeof(Individual) * offspring_count);
 
-    printf("[\033[1;36mRegen\033[0m] Replacing individual %d using parents %d and %d\n", i, p1, p2);
+  for (int i = 0; i < offspring_count; i++) {
+    bool allow_self_crossover = false; 
+    int p1, p2;
+    do {
+      p1 = rand() % SELECT_SIZE;
+      p2 = rand() % SELECT_SIZE;
+    } while (!allow_self_crossover && p1 == p2); // 如果不允许自交，确保 p1 ≠ p2  
 
-    /* Free old individual */ 
-    // 清理旧个体的资源
-    // printf("    [\033[0;31mFree\033[0m] Releasing testcases and coverage_r arrays\n");
-    destroy_individual(&pop->individuals[i]);
+    printf("[\033[1;36mCrossover\033[0m] Creating offspring %d from parent %d and %d\n", i, p1, p2);
 
-    /* Crossover */
-    printf("[\033[1;36mCrossover\033[0m] Creating new individual %d from parent %d and %d\n", i, p1, p2);
-    // 打印 parent 的 testcases
-    // print_individual_preview(&pop->individuals[p1], p1, "Parent");
-    // print_individual_preview(&pop->individuals[p2], p2, "Parent");
-
-    crossover_individuals(&pop->individuals[p1], &pop->individuals[p2], &pop->individuals[i]);
-
+    crossover_individuals(&pop->individuals[p1], &pop->individuals[p2], &offspring[i]);
     /* Mutate child testcases */
     printf("[\033[1;33mMutation\033[0m] Mutating new individual %d\n", i);
-    for (int t = 0; t < pop->individuals[i].tc_count; t++) {
-      if (rand() % 100 < 50) {
+    for (int t = 0; t < offspring[i].tc_count; t++) {
+      if (rand() % 100 < 70) {
+        int rand_idx = rand() % offspring[i].tc_count;
         // printf("    [\033[1;35mMutate\033[0m] Testcase %d: Applying mutation\n", t);
-        mutate_testcase(&pop->individuals[i].testcases[t]);
+        mutate_testcase(&offspring[i].testcases[t], &offspring[i].testcases[rand_idx]);
         // getchar();
       } 
       // else {
       //   printf("    [\033[0;90mSkip\033[0m] Testcase %d: Skipping mutation\n", t);
       // }
     }
-
-    pop->individuals[i].fitness = 0.0;
+    // 执行 run + fitness
+    run_individual(&offspring[i], use_argv);
+    // double mmd = compute_mmd_distance(offspring[i].coverage_r, seed_individual->coverage_r, offspring[i].tc_count);
+    // offspring[i].fitness = mmd;
+    // printf("[\033[1;32mFitness\033[0m] Offspring %d fitness = %.4f\n", i, mmd);
   }
+
+  /* 4. Merge and sort: keep top POP_SIZE */
+  int total = pop->count + offspring_count;
+  printf("[\033[1;34mMerge\033[0m] Merging %d original + %d offspring individuals...\n", pop->count, offspring_count);
+
+  Individual* merged = ck_alloc(sizeof(Individual) * total);
+
+  // 拷贝原始种群
+  for (int i = 0; i < pop->count; i++) {
+    merged[i] = clone_individual(&pop->individuals[i]);
+    printf("  [\033[0;36mMerged\033[0m] Original Individual %d | Fitness: %.4f\n", i, merged[i].fitness);
+    destroy_individual(&pop->individuals[i]);
+  }
+  ck_free(pop->individuals);
+
+  // 拷贝 offspring
+  for (int i = 0; i < offspring_count; i++) {
+    merged[pop->count + i] = clone_individual(&offspring[i]);
+    printf("  [\033[0;36mMerged\033[0m] Offspring Individual %d | Fitness: %.4f\n", pop->count + i, merged[pop->count + i].fitness);
+    destroy_individual(&offspring[i]);
+  }
+  ck_free(offspring);
+
+  // 排序所有个体
+  printf("[\033[1;34mSort\033[0m] Sorting all %d individuals by fitness (descending)...\n", total);
+  for (int i = 0; i < total - 1; i++) {
+    for (int j = i + 1; j < total; j++) {
+      if (merged[j].fitness > merged[i].fitness) {
+        // printf("    [\033[0;33mSwap\033[0m] Individual %d (%.4f) <-> %d (%.4f)\n",
+        //       i, merged[i].fitness, j, merged[j].fitness);
+        Individual tmp = merged[i];
+        merged[i] = merged[j];
+        merged[j] = tmp;
+      }
+    }
+  }
+
+  // // 清除原种群（避免内存泄漏）
+  // printf("[\033[1;34mCleanup\033[0m] Destroying original individuals...\n");
+  // for (int i = 0; i < pop->count; i++) {
+  //   destroy_individual(&pop->individuals[i]);
+  // }
+  // ck_free(pop->individuals);
+
+  // 只保留前 POP_SIZE 个
+  pop->individuals = ck_alloc(sizeof(Individual) * POP_SIZE);
+  pop->count = POP_SIZE;
+  for (int i = 0; i < POP_SIZE; i++) {
+    pop->individuals[i] = clone_individual(&merged[i]);
+    printf("  [\033[1;32mKeep\033[0m] Individual %d | Fitness: %.4f\n", i, merged[i].fitness);
+    destroy_individual(&merged[i]);
+  }
+
+  // 清除剩余多余个体
+  printf("[\033[1;34mCleanup\033[0m] Destroying %d unselected individuals...\n", total - POP_SIZE);
+  for (int i = POP_SIZE; i < total; i++) {
+    printf("  [\033[0;31mDrop\033[0m] Dropping Individual %d | Fitness: %.4f\n", i, merged[i].fitness);
+    destroy_individual(&merged[i]);
+  }
+  ck_free(merged);
+
+
+  // /* 3. Replace the bottom half with offspring */
+  // // 替换当前种群中排名较低的个体（劣等个体），为下一代腾出位置。
+  // for (int i = KEEP_SIZE; i < pop->count; i++) { //从第 KEEP_SIZE 个开始是要被替换掉的个体
+  //   int p1, p2;
+
+  //   // 选 p1，确保 p1 != i
+  //   do {
+  //     p1 = rand() % SELECT_SIZE;
+  //   } while (p1 == i);
+    
+  //   // 选 p2，确保 p2 != p1 且 p2 != i
+  //   do {
+  //     p2 = rand() % SELECT_SIZE;
+  //   } while (p2 == p1 || p2 == i);// 避免两个父代一样。
+
+  //   // printf("[\033[1;36mRegen\033[0m] Replacing individual %d using parents %d and %d\n", i, p1, p2);
+
+  //   /* Free old individual */ 
+  //   // 清理旧个体的资源
+  //   // printf("    [\033[0;31mFree\033[0m] Releasing testcases and coverage_r arrays\n");
+  //   destroy_individual(&pop->individuals[i]);
+
+  //   /* Crossover */
+  //   printf("[\033[1;36mCrossover\033[0m] Creating new individual %d from parent %d and %d\n", i, p1, p2);
+  //   // 打印 parent 的 testcases
+  //   // print_individual_preview(&pop->individuals[p1], p1, "Parent");
+  //   // print_individual_preview(&pop->individuals[p2], p2, "Parent");
+
+  //   crossover_individuals(&pop->individuals[p1], &pop->individuals[p2], &pop->individuals[i]);
+
+  //   /* Mutate child testcases */
+  //   printf("[\033[1;33mMutation\033[0m] Mutating new individual %d\n", i);
+  //   for (int t = 0; t < pop->individuals[i].tc_count; t++) {
+  //     if (rand() % 100 < 70) {
+  //       int rand_idx = rand() % pop->individuals[i].tc_count;
+  //       // printf("    [\033[1;35mMutate\033[0m] Testcase %d: Applying mutation\n", t);
+  //       mutate_testcase(&pop->individuals[i].testcases[t], &pop->individuals[i].testcases[rand_idx]);
+  //       // getchar();
+  //     } 
+  //     // else {
+  //     //   printf("    [\033[0;90mSkip\033[0m] Testcase %d: Skipping mutation\n", t);
+  //     // }
+  //   }
+
+  //   pop->individuals[i].fitness = 0.0;
+  // }
 
   printf("[\033[1;35mGA\033[0m] Generation completed.\n");
   return 0;
@@ -8710,7 +8864,7 @@ int main(int argc, char** argv) {
     FATAL("No valid seeds loaded from AFL queue.");
 
   run_individual(seed_individual, use_argv);  // 执行 dry-run，收集初始覆盖
-  pop = init_population(seed_individual, 20);  // 初始化主种群
+  pop = init_population(seed_individual, POP_SIZE, use_argv);  // 初始化主种群
   
   if (stop_soon) goto stop_fuzzing;
 
