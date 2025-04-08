@@ -5549,6 +5549,34 @@ Individual clone_individual(const Individual* src) {
   return clone;
 }
 
+// 在文件开头可以先写个初始化函数，建立 fitness_log.csv 文件
+static void init_fitness_log(const char* filename) {
+  FILE* f = fopen(filename, "w");
+  if (!f) {
+      perror("fopen fitness log");
+      return;
+  }
+  fprintf(f, "timestamp,generation,max_fitness\n");
+  fclose(f);
+}
+
+static int generation_counter = 0;  // 全局计数代数
+static const char* FITNESS_LOG_FILE = "fitness_log.csv";
+
+static void record_generation_fitness(Population* pop) {
+    // 当前种群经过排序后，第 0 个 fitness 最大
+    double max_fitness = pop->individuals[0].fitness;
+    // 获取当前时间戳（秒级），你也可以用 generation_counter 替代
+    time_t now = time(NULL);
+    FILE* f = fopen(FITNESS_LOG_FILE, "a");
+    if (f) {
+        fprintf(f, "%ld,%d,%.4f\n", now, generation_counter, max_fitness);
+        fclose(f);
+    } else {
+        perror("fopen fitness log");
+    }
+    generation_counter++;
+}
 
 
 /* Distri */
@@ -5571,8 +5599,8 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
     printf("[\033[1;36mCrossover\033[0m] Creating offspring %d from parent %d and %d\n", i, p1, p2);
 
     crossover_individuals(&pop->individuals[p1], &pop->individuals[p2], &offspring[i]);
-    compute_and_print_fitness(&offspring[i], i+1, "Offspring");
-    double original_fitness = offspring[i].fitness;
+    // compute_and_print_fitness(&offspring[i], i+1, "Offspring");
+    // double original_fitness = offspring[i].fitness;
     /* Mutate child testcases */
     printf("[\033[1;33mMutation\033[0m] Mutating new individual %d\n", i);
     for (int t = 0; t < offspring[i].tc_count; t++) {
@@ -5588,9 +5616,9 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
     }
     // 执行 run + fitness
     run_individual(&offspring[i], i+1, use_argv);
-    if (offspring[i].fitness < original_fitness) {
-      printf("  [\033[0;90mDegraded\033[0m] Mutation reduced fitness from %.4f to %.4f\n", original_fitness, offspring[i].fitness);
-    }
+    // if (offspring[i].fitness < original_fitness) {
+    //   printf("  [\033[0;90mDegraded\033[0m] Mutation reduced fitness from %.4f to %.4f\n", original_fitness, offspring[i].fitness);
+    // }
   }
 
   /* 4. Merge and sort: keep top POP_SIZE */
@@ -5629,20 +5657,22 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
     }
   }
 
-
   // 只保留前 POP_SIZE 个
   pop->individuals = ck_alloc(sizeof(Individual) * POP_SIZE);
   pop->count = POP_SIZE;
   for (int i = 0; i < POP_SIZE; i++) {
-    pop->individuals[i] = clone_individual(&merged[i]);
+    // pop->individuals[i] = clone_individual(&merged[i]);
+    if (i < POP_SIZE-3)
+      pop->individuals[i] = clone_individual(&merged[i]);
+    else
+      pop->individuals[i] = clone_individual(&merged[i+3]);
     printf("  [\033[1;32mKeep\033[0m] Individual %d | Fitness: %.4f\n", i, merged[i].fitness);
-    destroy_individual(&merged[i]);
   }
 
   // 清除剩余多余个体
   printf("[\033[1;34mCleanup\033[0m] Destroying %d unselected individuals...\n", total - POP_SIZE);
-  for (int i = POP_SIZE; i < total; i++) {
-    printf("  [\033[0;31mDrop\033[0m] Dropping Individual %d | Fitness: %.4f\n", i, merged[i].fitness);
+  for (int i = 0; i < total; i++) {
+    // printf("  [\033[0;31mDrop\033[0m] Dropping Individual %d | Fitness: %.4f\n", i, merged[i].fitness);
     destroy_individual(&merged[i]);
   }
   ck_free(merged);
@@ -5694,7 +5724,8 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
 
   //   pop->individuals[i].fitness = 0.0;
   // }
-
+  // 记录当代最高 fitness 到日志文件
+  record_generation_fitness(pop);
   printf("[\033[1;35mGA\033[0m] Generation completed.\n");
   return 0;
   
