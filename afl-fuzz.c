@@ -5223,8 +5223,36 @@ double compute_mmd_distance(uint8_t** coverage1, uint8_t** coverage2, int tc_cou
   return dist;
 }
 
-static void run_individual(Individual* indiv, char** use_argv) {
-  // printf("[\033[1;34mInfo\033[0m] Running individual with %d testcases...\n", indiv->tc_count);
+double compute_jaccard_distance(uint8_t** a_cov, uint8_t** b_cov, int tc_count) {
+  int union_count = 0, intersect_count = 0;
+  for (int i = 0; i < tc_count; i++) {
+    for (int j = 0; j < MAP_SIZE; j++) {
+      uint8_t a = a_cov[i][j];
+      uint8_t b = b_cov[i][j];
+      union_count     += __builtin_popcount(a | b);
+      intersect_count += __builtin_popcount(a & b);
+    }
+  }
+  if (union_count == 0) return 1.0; // 避免除零：两个都是全 0
+  return 1.0 - ((double)intersect_count / union_count);  // 越接近 0 越相似
+}
+
+
+static double compute_and_print_fitness(Individual* indiv, int index, const char* label) {
+  if (!indiv) return 0.0;
+  // indiv->fitness = compute_mmd_distance(indiv->coverage_r, seed_individual->coverage_r, indiv->tc_count);
+  indiv->fitness = compute_jaccard_distance(indiv->coverage_r, seed_individual->coverage_r, indiv->tc_count);
+  if (!label || strlen(label) == 0) {
+    label = "Individual";
+  }
+  printf("[\033[1;32mFitness\033[0m] %s %d fitness = %.4f\n", label, index, indiv->fitness);
+  return indiv->fitness;
+}
+
+
+
+static void run_individual(Individual* indiv, int index, char** use_argv) {
+  // printf("[\033[1;34mInfo\033[0m] Running individual %d with %d testcases...\n", index, indiv->tc_count);
 
   // printf("  [\033[1;36mTotal Testcase %d\033[0m] \n", indiv->tc_count);
   for (int i = 0; i < indiv->tc_count; i++) {
@@ -5265,9 +5293,7 @@ static void run_individual(Individual* indiv, char** use_argv) {
     tc->need_run = 0;
   }
   // 计算并记录 fitness 值
-  double mmd = compute_mmd_distance(indiv->coverage_r, seed_individual->coverage_r, indiv->tc_count);
-  indiv->fitness = mmd;
-  printf("[\033[1;32mFitness\033[0m] Individual fitness = %.4f\n", mmd);
+  compute_and_print_fitness(indiv, index, NULL);
 
   // printf("[\033[1;34mInfo\033[0m] Done running individual.\n");
 }
@@ -5285,7 +5311,7 @@ Population* init_population(Individual* seed, int pop_size, char** use_argv) {
   pop->individuals = ck_alloc(sizeof(Individual) * pop_size);
 
   for (int i = 0; i < pop_size; i++) {
-    printf("  [\033[1;36mIndividual %d\033[0m] Generating testcases...\n", i);
+    printf("  [\033[1;36mIndividual %d\033[0m] Generating testcases...\n", i+1);
 
     Individual* ind = &pop->individuals[i];
     ind->tc_count = seed->tc_count;
@@ -5336,7 +5362,7 @@ Population* init_population(Individual* seed, int pop_size, char** use_argv) {
 
       ind->coverage_r[j] = tc->coverage_ptr;
     }
-    run_individual(ind, use_argv);
+    run_individual(ind, i+1, use_argv);
   }
 
   // printf("[\033[1;34mInfo\033[0m] Dumping created population content...\n");
@@ -5431,7 +5457,7 @@ void crossover_individuals(Individual* p1, Individual* p2, Individual* child) {
     memcpy(dst->data, src->data, dst->size);
 
     dst->coverage_ptr = ck_alloc(MAP_SIZE);
-    memset(dst->coverage_ptr, 0, MAP_SIZE);
+    memcpy(dst->coverage_ptr, src->coverage_ptr, MAP_SIZE);
 
     dst->need_run = 0;
     dst->fname = NULL;
@@ -5487,7 +5513,7 @@ void mutate_testcase(TestCase* tc, TestCase* tc2) {
 }
 
 Individual clone_individual(const Individual* src) {
-  printf("[Clone] Cloning individual with %d testcases...\n", src->tc_count);
+  // printf("[Clone] Cloning individual with %d testcases...\n", src->tc_count);
   Individual clone;
   clone.tc_count = src->tc_count;
   clone.fitness = src->fitness;
@@ -5530,27 +5556,7 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
 
   printf("[\033[1;35mGA\033[0m] Starting one generation of fuzz_population with %d individual(s)...\n", pop->count);
 
-  // /* 1. Evaluate fitness for each individual */
-  // for (int i = 0; i < pop->count; i++) {
-  //   printf("[\033[1;34mEval\033[0m] Running individual %d...\n", i);
-  //   run_individual(&pop->individuals[i], use_argv);
-  // }
-
-  // /* 2. Sort individuals by descending fitness */
-  // printf("[\033[1;34mSort\033[0m] Sorting individuals by fitness...\n");
-  // for (int i = 0; i < pop->count - 1; i++) {
-  //   for (int j = i + 1; j < pop->count; j++) {
-  //     if (pop->individuals[j].fitness > pop->individuals[i].fitness) {
-  //       // printf("[\033[1;33mSwap\033[0m] Swapping individual %d (%.4f) with %d (%.4f)\n",
-  //       //        i, pop->individuals[i].fitness, j, pop->individuals[j].fitness);
-  //       Individual tmp = pop->individuals[i];
-  //       pop->individuals[i] = pop->individuals[j];
-  //       pop->individuals[j] = tmp;
-  //     }
-  //   }
-  // } // “更大的个体”被一步步冒泡到前面
-
-  /* 3. Generate offspring and collect them */
+  /* 1. Generate offspring and collect them */
   int offspring_count = pop->count - KEEP_SIZE;
   Individual* offspring = ck_alloc(sizeof(Individual) * offspring_count);
 
@@ -5565,10 +5571,12 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
     printf("[\033[1;36mCrossover\033[0m] Creating offspring %d from parent %d and %d\n", i, p1, p2);
 
     crossover_individuals(&pop->individuals[p1], &pop->individuals[p2], &offspring[i]);
+    compute_and_print_fitness(&offspring[i], i+1, "Offspring");
+    double original_fitness = offspring[i].fitness;
     /* Mutate child testcases */
     printf("[\033[1;33mMutation\033[0m] Mutating new individual %d\n", i);
     for (int t = 0; t < offspring[i].tc_count; t++) {
-      if (rand() % 100 < 70) {
+      if (rand() % 100 < 50) {
         int rand_idx = rand() % offspring[i].tc_count;
         // printf("    [\033[1;35mMutate\033[0m] Testcase %d: Applying mutation\n", t);
         mutate_testcase(&offspring[i].testcases[t], &offspring[i].testcases[rand_idx]);
@@ -5579,10 +5587,10 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
       // }
     }
     // 执行 run + fitness
-    run_individual(&offspring[i], use_argv);
-    // double mmd = compute_mmd_distance(offspring[i].coverage_r, seed_individual->coverage_r, offspring[i].tc_count);
-    // offspring[i].fitness = mmd;
-    // printf("[\033[1;32mFitness\033[0m] Offspring %d fitness = %.4f\n", i, mmd);
+    run_individual(&offspring[i], i+1, use_argv);
+    if (offspring[i].fitness < original_fitness) {
+      printf("  [\033[0;90mDegraded\033[0m] Mutation reduced fitness from %.4f to %.4f\n", original_fitness, offspring[i].fitness);
+    }
   }
 
   /* 4. Merge and sort: keep top POP_SIZE */
@@ -5594,7 +5602,7 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
   // 拷贝原始种群
   for (int i = 0; i < pop->count; i++) {
     merged[i] = clone_individual(&pop->individuals[i]);
-    printf("  [\033[0;36mMerged\033[0m] Original Individual %d | Fitness: %.4f\n", i, merged[i].fitness);
+    // printf("  [\033[0;36mMerged\033[0m] Original Individual %d | Fitness: %.4f\n", i, merged[i].fitness);
     destroy_individual(&pop->individuals[i]);
   }
   ck_free(pop->individuals);
@@ -5602,7 +5610,7 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
   // 拷贝 offspring
   for (int i = 0; i < offspring_count; i++) {
     merged[pop->count + i] = clone_individual(&offspring[i]);
-    printf("  [\033[0;36mMerged\033[0m] Offspring Individual %d | Fitness: %.4f\n", pop->count + i, merged[pop->count + i].fitness);
+    // printf("  [\033[0;36mMerged\033[0m] Offspring Individual %d | Fitness: %.4f\n", pop->count + i, merged[pop->count + i].fitness);
     destroy_individual(&offspring[i]);
   }
   ck_free(offspring);
@@ -5621,12 +5629,6 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
     }
   }
 
-  // // 清除原种群（避免内存泄漏）
-  // printf("[\033[1;34mCleanup\033[0m] Destroying original individuals...\n");
-  // for (int i = 0; i < pop->count; i++) {
-  //   destroy_individual(&pop->individuals[i]);
-  // }
-  // ck_free(pop->individuals);
 
   // 只保留前 POP_SIZE 个
   pop->individuals = ck_alloc(sizeof(Individual) * POP_SIZE);
@@ -8863,7 +8865,7 @@ int main(int argc, char** argv) {
   if (!seed_individual || seed_individual->tc_count == 0)
     FATAL("No valid seeds loaded from AFL queue.");
 
-  run_individual(seed_individual, use_argv);  // 执行 dry-run，收集初始覆盖
+  run_individual(seed_individual, 0, use_argv);  // 执行 dry-run，收集初始覆盖
   pop = init_population(seed_individual, POP_SIZE, use_argv);  // 初始化主种群
   
   if (stop_soon) goto stop_fuzzing;
