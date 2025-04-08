@@ -5241,7 +5241,7 @@ double compute_jaccard_distance(uint8_t** a_cov, uint8_t** b_cov, int tc_count) 
 static double compute_and_print_fitness(Individual* indiv, int index, const char* label) {
   if (!indiv) return 0.0;
   // indiv->fitness = compute_mmd_distance(indiv->coverage_r, seed_individual->coverage_r, indiv->tc_count);
-  indiv->fitness = compute_jaccard_distance(indiv->coverage_r, seed_individual->coverage_r, indiv->tc_count);
+  indiv->fitness = compute_mmd_distance(indiv->coverage_r, seed_individual->coverage_r, indiv->tc_count);
   if (!label || strlen(label) == 0) {
     label = "Individual";
   }
@@ -5561,7 +5561,7 @@ static void init_fitness_log(const char* filename) {
 }
 
 static int generation_counter = 0;  // 全局计数代数
-static const char* FITNESS_LOG_FILE = "fitness_log.csv";
+static const char* FITNESS_LOG_FILE = "fitness_log(mmd).csv";
 
 static void record_generation_fitness(Population* pop) {
     // 当前种群经过排序后，第 0 个 fitness 最大
