@@ -311,7 +311,7 @@ typedef struct {
 
 static Population *pop;
 static Individual *seed_individual;
-#define POP_SIZE 10
+#define POP_SIZE 15
 #define KEEP_SIZE 5
 #define SELECT_SIZE (POP_SIZE / 2)
 
@@ -5249,7 +5249,55 @@ static double compute_and_print_fitness(Individual* indiv, int index, const char
   return indiv->fitness;
 }
 
+#include <sys/stat.h>  // for mkdir()
 
+// 递增 id 计数器（每次调用都会加）
+static int global_sample_id = 0;
+
+// 保存 testcase，按 AFL 风格命名：output_samples/id:000000,ind:00,tc:00.js
+void save_testcase_sample(int indiv_idx, int tc_idx, uint8_t* data, size_t size) {
+  // mkdir("/home/qq/out/1/queue", 0700);
+  // 获取当前时间戳（秒）
+  time_t now = time(NULL);
+  // 生成 AFL 风格文件名
+  char fname[512];
+  snprintf(fname, sizeof(fname),
+           "/home/qq/out/1/queue/id:%06d,ind:%02d,tc:%02d,time:%ld.js",
+           global_sample_id++, indiv_idx, tc_idx, now);
+
+  FILE* f = fopen(fname, "wb");
+  if (f) {
+    fwrite(data, 1, size, f);
+    fclose(f);
+    // printf("[Saved] %s\n", fname);
+  } else {
+    perror("[Save Error]");
+  }
+}
+
+static int global_crash_id = 0;
+
+// 保存崩溃样本（AFL 风格命名）
+void save_crash_sample(int indiv_idx, int tc_idx, uint8_t* data, size_t size, int fault_type) {
+  // 获取当前时间戳
+  time_t now = time(NULL);
+
+  // 生成文件名（AFL 风格 + 时间戳）
+  char fname[512];
+  snprintf(fname, sizeof(fname),
+           "/home/qq/out/1/crashes/id:%06d,ind:%02d,tc:%02d,fault:%d,time:%ld.js",
+           global_crash_id++, indiv_idx, tc_idx, fault_type, now);
+
+  // 写入样本内容
+  FILE* f = fopen(fname, "wb");
+  if (f) {
+    fwrite(data, 1, size, f);
+    fclose(f);
+    printf("  [\033[1;31mCrash Saved\033[0m] → %s\n", fname);
+  } else {
+    perror("  [Crash Save Error]");
+  }
+}
 
 static void run_individual(Individual* indiv, int index, char** use_argv) {
   // printf("[\033[1;34mInfo\033[0m] Running individual %d with %d testcases...\n", index, indiv->tc_count);
@@ -5276,13 +5324,17 @@ static void run_individual(Individual* indiv, int index, char** use_argv) {
     // 执行目标程序
     s32 fault = run_target(use_argv, exec_tmout);
 
-    // 判断执行结果
-    if (fault != FAULT_NONE) {
+    if (fault == FAULT_CRASH) {
+      save_crash_sample(index, i, tc->data, tc->size, fault);
+      // 不清空 trace_bits
+    } else if (fault != FAULT_NONE) {
       printf("\033[1;31m[Fault]\033[0m Type = %d\n", fault);
-      memset(tc->coverage_ptr, 0, MAP_SIZE);  // 清空覆盖率
+      memset(tc->coverage_ptr, 0, MAP_SIZE);  // 清除不可信 trace
       indiv->coverage_r[i] = tc->coverage_ptr;
+      tc->need_run = 0;
       continue;
     }
+    
 
     // print_trace_bits();
     // print_virgin_bits();
@@ -5291,6 +5343,7 @@ static void run_individual(Individual* indiv, int index, char** use_argv) {
     memcpy(tc->coverage_ptr, trace_bits, MAP_SIZE);
     indiv->coverage_r[i] = tc->coverage_ptr;
     tc->need_run = 0;
+    save_testcase_sample(index, i, tc->data, tc->size);
   }
   // 计算并记录 fitness 值
   compute_and_print_fitness(indiv, index, NULL);
@@ -5604,7 +5657,7 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
     /* Mutate child testcases */
     printf("[\033[1;33mMutation\033[0m] Mutating new individual %d\n", i);
     for (int t = 0; t < offspring[i].tc_count; t++) {
-      if (rand() % 100 < 50) {
+      if (rand() % 100 < 30) {
         int rand_idx = rand() % offspring[i].tc_count;
         // printf("    [\033[1;35mMutate\033[0m] Testcase %d: Applying mutation\n", t);
         mutate_testcase(&offspring[i].testcases[t], &offspring[i].testcases[rand_idx]);
@@ -5662,7 +5715,7 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
   pop->count = POP_SIZE;
   for (int i = 0; i < POP_SIZE; i++) {
     // pop->individuals[i] = clone_individual(&merged[i]);
-    if (i < POP_SIZE-3)
+    if (i < POP_SIZE/2)
       pop->individuals[i] = clone_individual(&merged[i]);
     else
       pop->individuals[i] = clone_individual(&merged[i+3]);
