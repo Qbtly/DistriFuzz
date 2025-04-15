@@ -315,6 +315,9 @@ static Individual *seed_individual;
 #define KEEP_SIZE 5
 #define SELECT_SIZE (POP_SIZE / 2)
 
+// 修改为变量并初始化为默认值
+char* FITNESS_LOG_FILE = NULL;
+
 /* Fuzzing stages */
 
 enum {
@@ -4052,6 +4055,8 @@ static void check_term_size(void);
 
 static void show_stats(void) {
 
+  
+
   static u64 last_stats_ms, last_plot_ms, last_ms, last_execs;
   static double avg_exec;
   double t_byte_ratio, stab_ratio;
@@ -4131,6 +4136,8 @@ static void show_stats(void) {
     maybe_update_plot_file(t_byte_ratio, avg_exec);
  
   }
+
+  return;
 
   /* Honor AFL_EXIT_WHEN_DONE and AFL_BENCH_UNTIL_CRASH. */
 
@@ -5315,21 +5322,31 @@ static void run_individual(Individual* indiv, int index, char** use_argv) {
     }
 
     // 写入测试样本到 .cur_input
-    write_to_testcase(tc->data, tc->size);
+    // write_to_testcase(tc->data, tc->size);
     // printf("  [\033[1;36mTestcase %d\033[0m] → \033[1;34mExecuting target...\033[0m ", i);
 
-    memset(trace_bits, 0, MAP_SIZE);
-    MEM_BARRIER();
+    // memset(trace_bits, 0, MAP_SIZE);
+    // MEM_BARRIER();
 
     // 执行目标程序
-    s32 fault = run_target(use_argv, exec_tmout);
+    // s32 fault = run_target(use_argv, exec_tmout);
 
-    if (fault == FAULT_CRASH) {
-      save_crash_sample(index, i, tc->data, tc->size, fault);
-      // 不清空 trace_bits
-    } else if (fault != FAULT_NONE) {
-      printf("\033[1;31m[Fault]\033[0m Type = %d\n", fault);
-      memset(tc->coverage_ptr, 0, MAP_SIZE);  // 清除不可信 trace
+    // if (fault == FAULT_CRASH) {
+    //   save_crash_sample(index, i, tc->data, tc->size, fault);
+    //   // 不清空 trace_bits
+    // } else if (fault != FAULT_NONE) {
+    //   printf("\033[1;31m[Fault]\033[0m Type = %d\n", fault);
+    //   memset(tc->coverage_ptr, 0, MAP_SIZE);  // 清除不可信 trace
+    //   indiv->coverage_r[i] = tc->coverage_ptr;
+    //   tc->need_run = 0;
+    //   continue;
+    // }
+
+    u8 ret = common_fuzz_stuff(use_argv, tc->data, tc->size);
+
+    if (ret == 1) {
+      // 样本被 AFL 主动跳过，不记录覆盖信息
+      memset(tc->coverage_ptr, 0, MAP_SIZE);
       indiv->coverage_r[i] = tc->coverage_ptr;
       tc->need_run = 0;
       continue;
@@ -5343,7 +5360,7 @@ static void run_individual(Individual* indiv, int index, char** use_argv) {
     memcpy(tc->coverage_ptr, trace_bits, MAP_SIZE);
     indiv->coverage_r[i] = tc->coverage_ptr;
     tc->need_run = 0;
-    save_testcase_sample(index, i, tc->data, tc->size);
+    // save_testcase_sample(index, i, tc->data, tc->size);
   }
   // 计算并记录 fitness 值
   compute_and_print_fitness(indiv, index, NULL);
@@ -5614,7 +5631,7 @@ static void init_fitness_log(const char* filename) {
 }
 
 static int generation_counter = 0;  // 全局计数代数
-static const char* FITNESS_LOG_FILE = "fitness_log(mmd).csv";
+// static const char* FITNESS_LOG_FILE = "fitness_log(mmd).csv";
 
 static void record_generation_fitness(Population* pop) {
     // 当前种群经过排序后，第 0 个 fitness 最大
@@ -8944,6 +8961,15 @@ int main(int argc, char** argv) {
 
 
   /* Distri */
+  // 尝试从环境变量中读取日志文件名
+  const char* log_env = getenv("FITNESS_LOG_FILE");
+  if (log_env) {
+    FITNESS_LOG_FILE = strdup(log_env);  // 拷贝一下，避免修改原始字符串
+    printf("[+] Using fitness log file: %s\n", FITNESS_LOG_FILE);
+  } else {
+    FITNESS_LOG_FILE = "fitness_log(mmd).csv";  // 默认值
+    printf("[+] Using default fitness log file: %s\n", FITNESS_LOG_FILE);
+  }
   ACTF("Building initial population from queue...");
   seed_individual = build_individual_from_queue();
   if (!seed_individual || seed_individual->tc_count == 0)

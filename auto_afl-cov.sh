@@ -16,18 +16,20 @@ mkdir -p "$LOG_DIR"
 TIMESTAMP=$(date +"%Y%m%d_%H%M")
 
 # 生成输出目录
-# OUTDIR="$LOG_DIR/coverage_$TIMESTAMP"
-# mkdir -p "$OUTDIR"
+OUTDIR="$LOG_DIR/coverage_$TIMESTAMP"
+mkdir -p "$OUTDIR"
 
 # 执行覆盖率分析（不使用 --live，每次一次性分析）
 python2 "$COV_TOOL" \
-  --overwrite \
   --cover-corpus \
+  --disable-lcov-web \
   --enable-branch-coverage \
   --disable-gcov-check DISABLE_GCOV_CHECK\
   -d "$AFL_OUT_DIR" \
-  --coverage-cmd "timeout -s SIGKILL 1 $TARGET AFL_FILE" \
-  --code-dir "$SRC_DIR" 
+  -d2 "$OUTDIR" \
+  --coverage-cmd "timeout -s SIGKILL 10 $TARGET AFL_FILE" \
+  --code-dir "$SRC_DIR" \
+  # --output-dir "$OUTDIR"
 
 # echo "[✓] 覆盖率分析完成，结果保存在 $OUTDIR"
 echo "[✓] 覆盖率分析完成，结果保存在"
