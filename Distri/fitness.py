@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import csv
 from datetime import datetime
 
-def plot_fitness_over_time(log_file='/home/qq/DistriFuzz/fitness_log(mmd).csv'):
+def plot_fitness_over_time(log_file='/home/DistriFuzz/fitness_log(mmd).csv'):
     timestamps = []
     fitness_values = []
 
@@ -17,9 +17,21 @@ def plot_fitness_over_time(log_file='/home/qq/DistriFuzz/fitness_log(mmd).csv'):
             timestamps.append(datetime.fromtimestamp(ts))  # 转为人类可读时间
             fitness_values.append(fitness)
 
+    # 控制稀疏程度
+    step = 30
+    sparse_timestamps = timestamps[::step]
+    sparse_fitness = fitness_values[::step]
+
     # 绘图
-    plt.figure(figsize=(10, 5))
-    plt.plot(timestamps, fitness_values, marker='o', linestyle='-')
+    plt.figure(figsize=(12, 6))
+    plt.plot(sparse_timestamps, sparse_fitness, marker='o', linestyle='-')
+
+    N = 5
+    for i, (x, y) in enumerate(zip(sparse_timestamps, sparse_fitness)):
+        if i < N or i >= len(sparse_fitness) - N:
+            plt.text(x, y + 0.2, f"{y:.2f}", ha='center', fontsize=8)
+
+
     plt.xlabel("Time")
     plt.ylabel("Max Fitness")
     plt.title("Fitness over Time")

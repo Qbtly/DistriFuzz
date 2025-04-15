@@ -5262,7 +5262,7 @@ void save_testcase_sample(int indiv_idx, int tc_idx, uint8_t* data, size_t size)
   // 生成 AFL 风格文件名
   char fname[512];
   snprintf(fname, sizeof(fname),
-           "/home/qq/out/1/queue/id:%06d,ind:%02d,tc:%02d,time:%ld.js",
+           "/home/out-distri/jsc/1/queue/id:%06d,ind:%02d,tc:%02d,time:%ld.js",
            global_sample_id++, indiv_idx, tc_idx, now);
 
   FILE* f = fopen(fname, "wb");
@@ -5285,7 +5285,7 @@ void save_crash_sample(int indiv_idx, int tc_idx, uint8_t* data, size_t size, in
   // 生成文件名（AFL 风格 + 时间戳）
   char fname[512];
   snprintf(fname, sizeof(fname),
-           "/home/qq/out/1/crashes/id:%06d,ind:%02d,tc:%02d,fault:%d,time:%ld.js",
+           "/home/out-distri/jsc/1/crashes/id:%06d,ind:%02d,tc:%02d,fault:%d,time:%ld.js",
            global_crash_id++, indiv_idx, tc_idx, fault_type, now);
 
   // 写入样本内容
