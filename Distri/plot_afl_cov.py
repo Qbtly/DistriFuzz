@@ -34,6 +34,8 @@ def parse_afl_cov_log(file_path):
 def plot_coverage_trend(log_file='coverage.log'):
     x, lines, funcs, branches = parse_afl_cov_log(log_file)
 
+    print(len(x), len(lines), len(funcs), len(branches))
+
     plt.figure(figsize=(12, 6))
 
     def plot_with_labels(x, y, label, marker):
@@ -41,7 +43,7 @@ def plot_coverage_trend(log_file='coverage.log'):
         for i, (x_i, y_i) in enumerate(zip(x, y)):
             plt.text(x_i, y_i + 0.5, f"{y_i:.1f}%", ha='center', va='bottom', fontsize=8)
 
-    step = 10
+    step = 1
     plot_with_labels(x[::step], lines[::step], 'Line Coverage', 'o')
     plot_with_labels(x[::step], funcs[::step], 'Function Coverage', 's')
     plot_with_labels(x[::step], branches[::step], 'Branch Coverage', '^')
@@ -53,7 +55,6 @@ def plot_coverage_trend(log_file='coverage.log'):
     plt.grid(True)
     plt.tight_layout()
     plt.savefig("afl_coverage_trend_jsc_sp.png")
-    print("图已保存为 afl_coverage_trend_annotated.png")
 
 # 使用示例
 plot_coverage_trend("/home/out-superion/jsc-24/1/cov/afl-cov.log")
