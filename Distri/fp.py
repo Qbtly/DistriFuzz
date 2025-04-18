@@ -78,14 +78,26 @@ def plot_trend_comparison(fitness_log, plot_data_file, save_path, title):
     plt.show()
 
 plot_trend_comparison(
-    "/home/DistriFuzz/Distri/logs/fitness_jerry.csv",
-    "/home/out-distri/jerry/1/plot_data",
-    "fp_jerry.png",
+    "/home/DistriFuzz/Distri/logs/fitness_jerry2.csv",
+    "/home/out-distri/jerry/2/plot_data",
+    "fp_jerry2.png",
     "Jerry: Fitness vs AFL Paths Over Time"
 )
 plot_trend_comparison(
-    "/home/DistriFuzz/Distri/logs/fitness_jsc.csv",
+    "/home/DistriFuzz/Distri/logs/fitness_jsc2.csv",
     "/home/out-distri/jsc/2/plot_data",
-    "fp_jsc.png",
+    "fp_jsc2.png",
+    "JSC: Fitness vs AFL Paths Over Time"
+)
+plot_trend_comparison(
+    "/home/DistriFuzz/Distri/logs/fitness_jerry3.csv",
+    "/home/out-distri/jerry/3/plot_data",
+    "fp_jerry3.png",
+    "Jerry: Fitness vs AFL Paths Over Time"
+)
+plot_trend_comparison(
+    "/home/DistriFuzz/Distri/logs/fitness_jsc3.csv",
+    "/home/out-distri/jsc/3/plot_data",
+    "fp_jsc3.png",
     "JSC: Fitness vs AFL Paths Over Time"
 )

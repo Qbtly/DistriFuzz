@@ -315,6 +315,14 @@ static Individual *seed_individual;
 #define KEEP_SIZE 5
 #define SELECT_SIZE (POP_SIZE / 2)
 
+#define STALL_LIMIT 2
+#define EPSILON 0.0001
+
+double prev_max_fitness = 0.0;
+int stall_generations = 0;
+EXP_ST u8 global_coverage[MAP_SIZE];
+
+
 // 修改为变量并初始化为默认值
 char* FITNESS_LOG_FILE = NULL;
 
@@ -4055,8 +4063,6 @@ static void check_term_size(void);
 
 static void show_stats(void) {
 
-  
-
   static u64 last_stats_ms, last_plot_ms, last_ms, last_execs;
   static double avg_exec;
   double t_byte_ratio, stab_ratio;
@@ -5125,29 +5131,6 @@ static u8 could_be_interest(u32 old_val, u32 new_val, u8 blen, u8 check_le) {
 }
 
 /* Distri */
-// 生成 pop_size 个 Individual
-
-void destroy_individual(Individual* ind) {
-  // printf("[Free] Freed individual with %d testcases.\n", ind->tc_count);
-  if (!ind) return;
-  for (int i = 0; i < ind->tc_count; i++) {
-    ck_free(ind->testcases[i].data);
-    ck_free(ind->testcases[i].coverage_ptr);
-    if (ind->testcases[i].fname) ck_free(ind->testcases[i].fname);
-  }
-  ck_free(ind->testcases);
-  ck_free(ind->coverage_r);
-}
-
-void destroy_population(Population* pop) {
-  if (!pop) return;
-  for (int i = 0; i < pop->count; i++) {
-    destroy_individual(&pop->individuals[i]);
-  }
-  ck_free(pop->individuals);
-  ck_free(pop);
-}
-
 void print_individual_preview(Individual* ind, int id, const char* label) {
   if (!ind) {
     printf("  [\033[1;31mError\033[0m] %s %d is NULL.\n", label, id);
@@ -5215,40 +5198,78 @@ void print_virgin_bits() {
 }
 
 /* Compute MMD distance between two coverage distributions */
-double compute_mmd_distance(uint8_t** coverage1, uint8_t** coverage2, int tc_count) {
+double compute_mmd_distance(uint8_t** coverage1, int count1,
+  uint8_t** coverage2, int count2) {
   double dist = 0.0;
   for (int i = 0; i < MAP_SIZE; i++) {
-    uint64_t sum1 = 0, sum2 = 0;
-    for (int j = 0; j < tc_count; j++) {
-      sum1 += coverage1[j][i];
-      sum2 += coverage2[j][i];
-    }
-    double p = (double)sum1 / tc_count;
-    double q = (double)sum2 / tc_count;
-    dist += (p - q) * (p - q);
+  uint64_t sum1 = 0, sum2 = 0;
+
+  for (int j = 0; j < count1; j++) sum1 += coverage1[j][i];
+  for (int j = 0; j < count2; j++) sum2 += coverage2[j][i];
+
+  double p = (double)sum1 / count1;
+  double q = (double)sum2 / count2;
+
+  dist += (p - q) * (p - q);
   }
   return dist;
 }
 
-double compute_jaccard_distance(uint8_t** a_cov, uint8_t** b_cov, int tc_count) {
+
+double compute_jaccard_distance(uint8_t** cov1, int count1,
+  uint8_t** cov2, int count2) {
   int union_count = 0, intersect_count = 0;
-  for (int i = 0; i < tc_count; i++) {
-    for (int j = 0; j < MAP_SIZE; j++) {
-      uint8_t a = a_cov[i][j];
-      uint8_t b = b_cov[i][j];
-      union_count     += __builtin_popcount(a | b);
-      intersect_count += __builtin_popcount(a & b);
-    }
+
+  for (int i = 0; i < MAP_SIZE; i++) {
+  uint8_t acc1 = 0, acc2 = 0;
+
+  for (int j = 0; j < count1; j++) acc1 |= cov1[j][i];
+  for (int j = 0; j < count2; j++) acc2 |= cov2[j][i];
+
+  union_count     += __builtin_popcount(acc1 | acc2);
+  intersect_count += __builtin_popcount(acc1 & acc2);
   }
-  if (union_count == 0) return 1.0; // 避免除零：两个都是全 0
-  return 1.0 - ((double)intersect_count / union_count);  // 越接近 0 越相似
+
+  if (union_count == 0) return 1.0;
+  return 1.0 - ((double)intersect_count / union_count);
 }
+
+int count_novel_bits_multi(uint8_t* indiv_cov, uint8_t** seed_covs, int seed_count) {
+  int novel = 0;
+
+  for (int i = 0; i < MAP_SIZE; i++) {
+    uint8_t seed_union = 0;
+
+    for (int j = 0; j < seed_count; j++) {
+      seed_union |= seed_covs[j][i];
+    }
+
+    novel += __builtin_popcount(indiv_cov[i] & ~seed_union);
+  }
+
+  return novel;
+}
+
+double compute_coverage_novelty_multi(Individual* indiv, Individual* seed) {
+  if (!indiv || !seed || !seed->coverage_r) return 0.0;
+
+  int total_novel = 0;
+
+  for (int i = 0; i < indiv->tc_count; i++) {
+    total_novel += count_novel_bits_multi(indiv->coverage_r[i], seed->coverage_r, seed->tc_count);
+  }
+
+  return (double)total_novel;
+}
+
+
 
 
 static double compute_and_print_fitness(Individual* indiv, int index, const char* label) {
   if (!indiv) return 0.0;
-  // indiv->fitness = compute_mmd_distance(indiv->coverage_r, seed_individual->coverage_r, indiv->tc_count);
-  indiv->fitness = compute_mmd_distance(indiv->coverage_r, seed_individual->coverage_r, indiv->tc_count);
+  // indiv->fitness = compute_jaccard_distance(indiv->coverage_r, indiv->tc_count, seed_individual->coverage_r, seed_individual->tc_count);
+  // indiv->fitness = compute_mmd_distance(indiv->coverage_r, indiv->tc_count, seed_individual->coverage_r, seed_individual->tc_count);
+  indiv->fitness = compute_coverage_novelty_multi(indiv, seed_individual);
   if (!label || strlen(label) == 0) {
     label = "Individual";
   }
@@ -5256,54 +5277,66 @@ static double compute_and_print_fitness(Individual* indiv, int index, const char
   return indiv->fitness;
 }
 
-#include <sys/stat.h>  // for mkdir()
+void init_individual(Individual* ind, int tc_count) {
+  if (!ind) return;
 
-// 递增 id 计数器（每次调用都会加）
-static int global_sample_id = 0;
+  ind->tc_count = tc_count;
+  ind->fitness = 0.0;
 
-// 保存 testcase，按 AFL 风格命名：output_samples/id:000000,ind:00,tc:00.js
-void save_testcase_sample(int indiv_idx, int tc_idx, uint8_t* data, size_t size) {
-  // mkdir("/home/qq/out/1/queue", 0700);
-  // 获取当前时间戳（秒）
-  time_t now = time(NULL);
-  // 生成 AFL 风格文件名
-  char fname[512];
-  snprintf(fname, sizeof(fname),
-           "/home/out-distri/jsc/1/queue/id:%06d,ind:%02d,tc:%02d,time:%ld.js",
-           global_sample_id++, indiv_idx, tc_idx, now);
+  ind->testcases = ck_alloc(sizeof(TestCase) * tc_count);
+  ind->coverage_r = ck_alloc(sizeof(uint8_t*) * tc_count);
 
-  FILE* f = fopen(fname, "wb");
-  if (f) {
-    fwrite(data, 1, size, f);
-    fclose(f);
-    // printf("[Saved] %s\n", fname);
-  } else {
-    perror("[Save Error]");
+  for (int i = 0; i < tc_count; i++) {
+    ind->testcases[i].data = NULL;
+    ind->testcases[i].size = 0;
+    ind->testcases[i].coverage_ptr = ck_alloc(MAP_SIZE);
+    memset(ind->testcases[i].coverage_ptr, 0, MAP_SIZE);
+    ind->testcases[i].need_run = 1;
+    ind->testcases[i].fname = NULL;
+
+    ind->coverage_r[i] = ind->testcases[i].coverage_ptr;
   }
 }
 
-static int global_crash_id = 0;
+void destroy_individual(Individual* ind) {
+  if (!ind) return;
 
-// 保存崩溃样本（AFL 风格命名）
-void save_crash_sample(int indiv_idx, int tc_idx, uint8_t* data, size_t size, int fault_type) {
-  // 获取当前时间戳
-  time_t now = time(NULL);
-
-  // 生成文件名（AFL 风格 + 时间戳）
-  char fname[512];
-  snprintf(fname, sizeof(fname),
-           "/home/out-distri/jsc/1/crashes/id:%06d,ind:%02d,tc:%02d,fault:%d,time:%ld.js",
-           global_crash_id++, indiv_idx, tc_idx, fault_type, now);
-
-  // 写入样本内容
-  FILE* f = fopen(fname, "wb");
-  if (f) {
-    fwrite(data, 1, size, f);
-    fclose(f);
-    printf("  [\033[1;31mCrash Saved\033[0m] → %s\n", fname);
-  } else {
-    perror("  [Crash Save Error]");
+  if (ind->testcases) {
+    for (int i = 0; i < ind->tc_count; i++) {
+      ck_free(ind->testcases[i].data);
+      ck_free(ind->testcases[i].coverage_ptr);
+      ck_free(ind->testcases[i].fname);
+    }
+    ck_free(ind->testcases);
   }
+
+  ck_free(ind->coverage_r);
+
+  // 清零结构体字段，防止悬挂指针
+  memset(ind, 0, sizeof(Individual));
+}
+
+
+void destroy_population(Population* pop) {
+  if (!pop) return;
+  for (int i = 0; i < pop->count; i++) {
+    destroy_individual(&pop->individuals[i]);
+  }
+  ck_free(pop->individuals);
+  ck_free(pop);
+}
+
+void update_seed_coverage_from_global(Individual* seed) {
+
+  destroy_individual(seed);
+
+  // 分配并初始化新的 coverage_r
+  init_individual(seed, 1);
+  for (int i = 0; i < MAP_SIZE; i++) {
+    seed->coverage_r[0][i] = ~virgin_bits[i];  // 记录当前全局覆盖
+  }
+
+  printf("[\033[1;33mStallHandler\033[0m] Updated seed_individual->coverage_r from global virgin_bits.\n");
 }
 
 static void run_individual(Individual* indiv, int index, char** use_argv) {
@@ -5320,27 +5353,6 @@ static void run_individual(Individual* indiv, int index, char** use_argv) {
       indiv->coverage_r[i] = tc->coverage_ptr;
       continue;
     }
-
-    // 写入测试样本到 .cur_input
-    // write_to_testcase(tc->data, tc->size);
-    // printf("  [\033[1;36mTestcase %d\033[0m] → \033[1;34mExecuting target...\033[0m ", i);
-
-    // memset(trace_bits, 0, MAP_SIZE);
-    // MEM_BARRIER();
-
-    // 执行目标程序
-    // s32 fault = run_target(use_argv, exec_tmout);
-
-    // if (fault == FAULT_CRASH) {
-    //   save_crash_sample(index, i, tc->data, tc->size, fault);
-    //   // 不清空 trace_bits
-    // } else if (fault != FAULT_NONE) {
-    //   printf("\033[1;31m[Fault]\033[0m Type = %d\n", fault);
-    //   memset(tc->coverage_ptr, 0, MAP_SIZE);  // 清除不可信 trace
-    //   indiv->coverage_r[i] = tc->coverage_ptr;
-    //   tc->need_run = 0;
-    //   continue;
-    // }
 
     u8 ret = common_fuzz_stuff(use_argv, tc->data, tc->size);
 
@@ -5360,6 +5372,10 @@ static void run_individual(Individual* indiv, int index, char** use_argv) {
     memcpy(tc->coverage_ptr, trace_bits, MAP_SIZE);
     indiv->coverage_r[i] = tc->coverage_ptr;
     tc->need_run = 0;
+    
+    for (int i = 0; i < MAP_SIZE; i++) {
+      global_coverage[i] = ~virgin_bits[i];
+    }
     // save_testcase_sample(index, i, tc->data, tc->size);
   }
   // 计算并记录 fitness 值
@@ -5367,6 +5383,7 @@ static void run_individual(Individual* indiv, int index, char** use_argv) {
 
   // printf("[\033[1;34mInfo\033[0m] Done running individual.\n");
 }
+
 
 Population* init_population(Individual* seed, int pop_size, char** use_argv) {
   if (!seed || seed->tc_count == 0) {
@@ -5384,10 +5401,11 @@ Population* init_population(Individual* seed, int pop_size, char** use_argv) {
     printf("  [\033[1;36mIndividual %d\033[0m] Generating testcases...\n", i+1);
 
     Individual* ind = &pop->individuals[i];
-    ind->tc_count = seed->tc_count;
-    ind->testcases = ck_alloc(sizeof(TestCase) * ind->tc_count);
-    ind->coverage_r = ck_alloc(sizeof(uint8_t*) * ind->tc_count);
-    ind->fitness = 0.0;
+    init_individual(ind, seed->tc_count);
+    // ind->tc_count = seed->tc_count;
+    // ind->testcases = ck_alloc(sizeof(TestCase) * ind->tc_count);
+    // ind->coverage_r = ck_alloc(sizeof(uint8_t*) * ind->tc_count);
+    // ind->fitness = 0.0;
 
     for (int j = 0; j < seed->tc_count; j++) {
       TestCase* tc = &ind->testcases[j];
@@ -5422,15 +5440,11 @@ Population* init_population(Individual* seed, int pop_size, char** use_argv) {
         memcpy(mutated_data, mutated_data0, mutated_len);
         
       }
-      // 初始化 testcase
+      // 更新 testcase
       tc->data = (uint8_t*)mutated_data;
       tc->size = mutated_len;
-      tc->coverage_ptr = ck_alloc(MAP_SIZE);
-      memset(tc->coverage_ptr, 0, MAP_SIZE);
       tc->need_run = 1;
-      tc->fname = NULL;
-
-      ind->coverage_r[j] = tc->coverage_ptr;
+      
     }
     run_individual(ind, i+1, use_argv);
   }
@@ -5619,23 +5633,9 @@ Individual clone_individual(const Individual* src) {
   return clone;
 }
 
-// 在文件开头可以先写个初始化函数，建立 fitness_log.csv 文件
-static void init_fitness_log(const char* filename) {
-  FILE* f = fopen(filename, "w");
-  if (!f) {
-      perror("fopen fitness log");
-      return;
-  }
-  fprintf(f, "timestamp,generation,max_fitness\n");
-  fclose(f);
-}
-
 static int generation_counter = 0;  // 全局计数代数
-// static const char* FITNESS_LOG_FILE = "fitness_log(mmd).csv";
-
-static void record_generation_fitness(Population* pop) {
-    // 当前种群经过排序后，第 0 个 fitness 最大
-    double max_fitness = pop->individuals[0].fitness;
+static void record_generation_fitness(double max_fitness) {
+  printf("[\033[1;32mFitness\033[0m] Max fitness = %.4f\n", max_fitness);
     // 获取当前时间戳（秒级），你也可以用 generation_counter 替代
     time_t now = time(NULL);
     FILE* f = fopen(FITNESS_LOG_FILE, "a");
@@ -5648,6 +5648,22 @@ static void record_generation_fitness(Population* pop) {
     generation_counter++;
 }
 
+void sort_individuals_by_fitness(Individual* individuals, int count) {
+  printf("[\033[1;34mSort\033[0m] Sorting %d individuals by fitness (descending)...\n", count);
+
+  for (int i = 0; i < count - 1; i++) {
+    for (int j = i + 1; j < count; j++) {
+      if (individuals[j].fitness > individuals[i].fitness) {
+        Individual tmp = individuals[i];
+        individuals[i] = individuals[j];
+        individuals[j] = tmp;
+      }
+    }
+  }
+
+  // 可选打印 top N fitness
+  printf("[\033[1;32mTop\033[0m] Best fitness after sort: %.4f\n", individuals[0].fitness);
+}
 
 /* Distri */
 static u8 fuzz_population(Population* pop, char** use_argv) {
@@ -5674,7 +5690,7 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
     /* Mutate child testcases */
     printf("[\033[1;33mMutation\033[0m] Mutating new individual %d\n", i);
     for (int t = 0; t < offspring[i].tc_count; t++) {
-      if (rand() % 100 < 30) {
+      if (rand() % 100 < 50) {
         int rand_idx = rand() % offspring[i].tc_count;
         // printf("    [\033[1;35mMutate\033[0m] Testcase %d: Applying mutation\n", t);
         mutate_testcase(&offspring[i].testcases[t], &offspring[i].testcases[rand_idx]);
@@ -5714,18 +5730,8 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
   ck_free(offspring);
 
   // 排序所有个体
-  printf("[\033[1;34mSort\033[0m] Sorting all %d individuals by fitness (descending)...\n", total);
-  for (int i = 0; i < total - 1; i++) {
-    for (int j = i + 1; j < total; j++) {
-      if (merged[j].fitness > merged[i].fitness) {
-        // printf("    [\033[0;33mSwap\033[0m] Individual %d (%.4f) <-> %d (%.4f)\n",
-        //       i, merged[i].fitness, j, merged[j].fitness);
-        Individual tmp = merged[i];
-        merged[i] = merged[j];
-        merged[j] = tmp;
-      }
-    }
-  }
+  sort_individuals_by_fitness(merged, total);
+
 
   // 只保留前 POP_SIZE 个
   pop->individuals = ck_alloc(sizeof(Individual) * POP_SIZE);
@@ -5747,56 +5753,33 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
   }
   ck_free(merged);
 
-
-  // /* 3. Replace the bottom half with offspring */
-  // // 替换当前种群中排名较低的个体（劣等个体），为下一代腾出位置。
-  // for (int i = KEEP_SIZE; i < pop->count; i++) { //从第 KEEP_SIZE 个开始是要被替换掉的个体
-  //   int p1, p2;
-
-  //   // 选 p1，确保 p1 != i
-  //   do {
-  //     p1 = rand() % SELECT_SIZE;
-  //   } while (p1 == i);
-    
-  //   // 选 p2，确保 p2 != p1 且 p2 != i
-  //   do {
-  //     p2 = rand() % SELECT_SIZE;
-  //   } while (p2 == p1 || p2 == i);// 避免两个父代一样。
-
-  //   // printf("[\033[1;36mRegen\033[0m] Replacing individual %d using parents %d and %d\n", i, p1, p2);
-
-  //   /* Free old individual */ 
-  //   // 清理旧个体的资源
-  //   // printf("    [\033[0;31mFree\033[0m] Releasing testcases and coverage_r arrays\n");
-  //   destroy_individual(&pop->individuals[i]);
-
-  //   /* Crossover */
-  //   printf("[\033[1;36mCrossover\033[0m] Creating new individual %d from parent %d and %d\n", i, p1, p2);
-  //   // 打印 parent 的 testcases
-  //   // print_individual_preview(&pop->individuals[p1], p1, "Parent");
-  //   // print_individual_preview(&pop->individuals[p2], p2, "Parent");
-
-  //   crossover_individuals(&pop->individuals[p1], &pop->individuals[p2], &pop->individuals[i]);
-
-  //   /* Mutate child testcases */
-  //   printf("[\033[1;33mMutation\033[0m] Mutating new individual %d\n", i);
-  //   for (int t = 0; t < pop->individuals[i].tc_count; t++) {
-  //     if (rand() % 100 < 70) {
-  //       int rand_idx = rand() % pop->individuals[i].tc_count;
-  //       // printf("    [\033[1;35mMutate\033[0m] Testcase %d: Applying mutation\n", t);
-  //       mutate_testcase(&pop->individuals[i].testcases[t], &pop->individuals[i].testcases[rand_idx]);
-  //       // getchar();
-  //     } 
-  //     // else {
-  //     //   printf("    [\033[0;90mSkip\033[0m] Testcase %d: Skipping mutation\n", t);
-  //     // }
-  //   }
-
-  //   pop->individuals[i].fitness = 0.0;
-  // }
+  // 当前种群经过排序后，第 0 个 fitness 最大
+  double cur_max_fitness = pop->individuals[0].fitness;
+  // printf("[\033[1;32mFitness\033[0m] Max fitness = %.4f\n", cur_max_fitness);
   // 记录当代最高 fitness 到日志文件
-  record_generation_fitness(pop);
-  printf("[\033[1;35mGA\033[0m] Generation completed.\n");
+  record_generation_fitness(cur_max_fitness);
+
+  //检测是否该更新seed fitness
+  // if (fabs(cur_max_fitness - prev_max_fitness) < EPSILON) {
+  //   stall_generations++;
+  // } else {
+  //   stall_generations = 0;
+  //   prev_max_fitness = cur_max_fitness;
+  // }
+  // if (stall_generations > STALL_LIMIT) {
+  //   printf("[\033[1;33mWarning\033[0m] Stalling detected. Updating seed coverage...\n");
+  //   update_seed_coverage_from_global(seed_individual);
+  //   stall_generations = 0; //reset
+  //   // 重新计算所有个体的适应度（参考新的 seed_individual）
+  //   for (int i = 0; i < pop->count; i++) {
+  //     compute_and_print_fitness(&pop->individuals[i], i, NULL);
+  //   }
+  //   sort_individuals_by_fitness(pop->individuals, pop->count);
+  //   // 记录当代最高 fitness 到日志文件
+  //   record_generation_fitness(pop->individuals[0].fitness);
+  // }
+  
+  // printf("[\033[1;32mFitness\033[0m] Max fitness = %.4f\n", cur_max_fitness);
   return 0;
   
 }
@@ -8971,12 +8954,15 @@ int main(int argc, char** argv) {
     printf("[+] Using default fitness log file: %s\n", FITNESS_LOG_FILE);
   }
   ACTF("Building initial population from queue...");
+  memset(global_coverage, 0, MAP_SIZE);
   seed_individual = build_individual_from_queue();
   if (!seed_individual || seed_individual->tc_count == 0)
     FATAL("No valid seeds loaded from AFL queue.");
 
   run_individual(seed_individual, 0, use_argv);  // 执行 dry-run，收集初始覆盖
   pop = init_population(seed_individual, POP_SIZE, use_argv);  // 初始化主种群
+  
+
   
   if (stop_soon) goto stop_fuzzing;
 
