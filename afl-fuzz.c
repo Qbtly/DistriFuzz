@@ -311,8 +311,10 @@ typedef struct {
 
 static Population *pop;
 static Individual *seed_individual;
-#define POP_SIZE 15
-#define KEEP_SIZE 5
+#define POP_SIZE 3
+#define KEEP_SIZE 1
+// #define POP_SIZE 15
+// #define KEEP_SIZE 5
 #define SELECT_SIZE (POP_SIZE / 2)
 
 #define STALL_LIMIT 2
@@ -5333,7 +5335,7 @@ void update_seed_coverage_from_global(Individual* seed) {
   // 分配并初始化新的 coverage_r
   init_individual(seed, 1);
   for (int i = 0; i < MAP_SIZE; i++) {
-    seed->coverage_r[0][i] = ~virgin_bits[i];  // 记录当前全局覆盖
+    seed->coverage_r[0][i] = global_coverage[i];  // 记录当前全局覆盖
   }
 
   printf("[\033[1;33mStallHandler\033[0m] Updated seed_individual->coverage_r from global virgin_bits.\n");
@@ -5363,8 +5365,6 @@ static void run_individual(Individual* indiv, int index, char** use_argv) {
       tc->need_run = 0;
       continue;
     }
-    
-
     // print_trace_bits();
     // print_virgin_bits();
 
@@ -5673,9 +5673,9 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
   /* 1. Generate offspring and collect them */
   int offspring_count = pop->count - KEEP_SIZE;
   Individual* offspring = ck_alloc(sizeof(Individual) * offspring_count);
-
+  printf("[\033[1;35mGA\033[0m] Generating %d offspring...\n", offspring_count);
   for (int i = 0; i < offspring_count; i++) {
-    bool allow_self_crossover = false; 
+    bool allow_self_crossover = true; 
     int p1, p2;
     do {
       p1 = rand() % SELECT_SIZE;
@@ -5741,7 +5741,8 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
     if (i < POP_SIZE/2)
       pop->individuals[i] = clone_individual(&merged[i]);
     else
-      pop->individuals[i] = clone_individual(&merged[i+3]);
+      // pop->individuals[i] = clone_individual(&merged[i+3]);
+      pop->individuals[i] = clone_individual(&merged[i]);
     printf("  [\033[1;32mKeep\033[0m] Individual %d | Fitness: %.4f\n", i, merged[i].fitness);
   }
 
@@ -5760,24 +5761,24 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
   record_generation_fitness(cur_max_fitness);
 
   //检测是否该更新seed fitness
-  // if (fabs(cur_max_fitness - prev_max_fitness) < EPSILON) {
-  //   stall_generations++;
-  // } else {
-  //   stall_generations = 0;
-  //   prev_max_fitness = cur_max_fitness;
-  // }
-  // if (stall_generations > STALL_LIMIT) {
-  //   printf("[\033[1;33mWarning\033[0m] Stalling detected. Updating seed coverage...\n");
-  //   update_seed_coverage_from_global(seed_individual);
-  //   stall_generations = 0; //reset
-  //   // 重新计算所有个体的适应度（参考新的 seed_individual）
-  //   for (int i = 0; i < pop->count; i++) {
-  //     compute_and_print_fitness(&pop->individuals[i], i, NULL);
-  //   }
-  //   sort_individuals_by_fitness(pop->individuals, pop->count);
-  //   // 记录当代最高 fitness 到日志文件
-  //   record_generation_fitness(pop->individuals[0].fitness);
-  // }
+  if (fabs(cur_max_fitness - prev_max_fitness) < EPSILON) {
+    stall_generations++;
+  } else {
+    stall_generations = 0;
+    prev_max_fitness = cur_max_fitness;
+  }
+  if (stall_generations > STALL_LIMIT) {
+    printf("[\033[1;33mWarning\033[0m] Stalling detected. Updating seed coverage...\n");
+    update_seed_coverage_from_global(seed_individual);
+    stall_generations = 0; //reset
+    // 重新计算所有个体的适应度（参考新的 seed_individual）
+    for (int i = 0; i < pop->count; i++) {
+      compute_and_print_fitness(&pop->individuals[i], i+1, NULL);
+    }
+    sort_individuals_by_fitness(pop->individuals, pop->count);
+    // 记录当代最高 fitness 到日志文件
+    record_generation_fitness(pop->individuals[0].fitness);
+  }
   
   // printf("[\033[1;32mFitness\033[0m] Max fitness = %.4f\n", cur_max_fitness);
   return 0;
