@@ -311,10 +311,10 @@ typedef struct {
 
 static Population *pop;
 static Individual *seed_individual;
-#define POP_SIZE 3
-#define KEEP_SIZE 1
-// #define POP_SIZE 15
-// #define KEEP_SIZE 5
+// #define POP_SIZE 5
+// #define KEEP_SIZE 1
+#define POP_SIZE 15
+#define KEEP_SIZE 5
 #define SELECT_SIZE (POP_SIZE / 2)
 
 #define STALL_LIMIT 2
@@ -370,6 +370,8 @@ enum {
   /* 05 */ FAULT_NOBITS
 };
 
+bool mark = true; 
+u8 ret_fault = FAULT_NONE; // 0:正常，1:超时，2:崩溃，3:错误，4:无指令，5:无位图
 
 /* Get unix time in milliseconds */
 
@@ -4799,6 +4801,27 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
 
   fault = run_target(argv, exec_tmout);
 
+  // FILE* f = fopen(FITNESS_LOG_FILE, "a");
+  // if (!f) {
+  //   perror("fopen FITNESS_LOG_FILE");
+  //   return 0;
+  // }
+
+  // 打印带颜色的 fault 类型（红色）
+  // const char* fault_str[] = {
+  //   "FAULT_NONE", "FAULT_TMOUT", "FAULT_CRASH",
+  //   "FAULT_ERROR", "FAULT_NOINST", "FAULT_NOBITS"
+  // };
+
+  ret_fault = fault;
+  // if (fault != FAULT_NONE) {
+    // mark = true;
+    // ret_fault = fault;
+    // fprintf(f, "\033[1;31m[Fault]\033[0m Type = %s (%u)\n", fault_str[fault], fault);
+  // }
+  // fclose(f);
+
+
   if (stop_soon) return 1;
 
   if (fault == FAULT_TMOUT) {
@@ -5236,33 +5259,91 @@ double compute_jaccard_distance(uint8_t** cov1, int count1,
   return 1.0 - ((double)intersect_count / union_count);
 }
 
-int count_novel_bits_multi(uint8_t* indiv_cov, uint8_t** seed_covs, int seed_count) {
+int count_novel_bits_multi(uint8_t* indiv_cov, int ind_index, uint8_t** seed_covs, int seed_count, int tc_index) {
   int novel = 0;
+
+  int seed_union_bits = 0;
 
   for (int i = 0; i < MAP_SIZE; i++) {
     uint8_t seed_union = 0;
-
     for (int j = 0; j < seed_count; j++) {
       seed_union |= seed_covs[j][i];
     }
 
-    novel += __builtin_popcount(indiv_cov[i] & ~seed_union);
-  }
+    seed_union_bits += __builtin_popcount(seed_union);
 
+    uint8_t new_bits = indiv_cov[i] & ~seed_union;
+    int count = __builtin_popcount(new_bits);
+    novel += count;
+  }
+  // FILE* f = fopen(FITNESS_LOG_FILE, "a");
+  // if (!f) {
+  //   perror("fopen FITNESS_LOG_FILE");
+  //   return 0;
+  // }
+  // if (novel > 0) {
+  //   fprintf(f, "\n=== Individual %d Testcase #%d ===\n", ind_index, tc_index);
+  //   fprintf(f, "[SEED] Total bits in seed_union: %d\n", seed_union_bits);
+  //   fprintf(f, "[RESULT] Total novel bits for this testcase = %d\n", novel);
+  //   // 打印 global_coverage 状态
+  //   int global_bits = 0;
+  //   for (int i = 0; i < MAP_SIZE; i++) {
+  //     global_bits += __builtin_popcount(global_coverage[i]);
+  //   }
+
+  //   fprintf(f, "[GLOBAL] Total bits set in global_coverage: %d\n", global_bits);
+  //   fprintf(f, "[GLOBAL] First 64 bytes of global_coverage:\n");
+  //   for (int i = 0; i < 64; i++) {
+  //     fprintf(f, "%02x ", global_coverage[i]);
+  //     if ((i + 1) % 16 == 0) fprintf(f, "\n");
+  //   }
+  // }
+  // if (novel > 100000) {
+  //   fprintf(f, "[WARNING] Extremely high novel value (%d) for testcase #%d\n", novel, tc_index);
+  //   fprintf(f, "[DUMP] First 64 bytes of indiv_cov:\n");
+  //   for (int k = 0; k < 64; k++) {
+  //     fprintf(f, "%02x ", indiv_cov[k]);
+  //     if ((k + 1) % 16 == 0) fprintf(f, "\n");
+  //   }
+  //   // 打印 global_coverage 状态
+  //   int global_bits = 0;
+  //   for (int i = 0; i < MAP_SIZE; i++) {
+  //     global_bits += __builtin_popcount(global_coverage[i]);
+  //   }
+
+  //   fprintf(f, "[GLOBAL] Total bits set in global_coverage: %d\n", global_bits);
+  //   fprintf(f, "[GLOBAL] First 64 bytes of global_coverage:\n");
+  //   for (int i = 0; i < 64; i++) {
+  //     fprintf(f, "%02x ", global_coverage[i]);
+  //     if ((i + 1) % 16 == 0) fprintf(f, "\n");
+  //   }
+  // }
+
+  // fclose(f);
   return novel;
 }
 
-double compute_coverage_novelty_multi(Individual* indiv, Individual* seed) {
+
+
+double compute_coverage_novelty_multi(Individual* indiv, int index, Individual* seed) {
   if (!indiv || !seed || !seed->coverage_r) return 0.0;
 
   int total_novel = 0;
 
   for (int i = 0; i < indiv->tc_count; i++) {
-    total_novel += count_novel_bits_multi(indiv->coverage_r[i], seed->coverage_r, seed->tc_count);
+    
+    int tc_novel = count_novel_bits_multi(indiv->coverage_r[i], index, seed->coverage_r, seed->tc_count, i);
+    if (tc_novel > 0) {
+      printf("\n=== Individual %d Testcase #%d ===\n", index, i);
+      printf("[INFO] Novel bits for testcase[%d] = %d\n", i, tc_novel);
+    }
+    total_novel += tc_novel;
   }
 
+  printf("[TOTAL] Novelty for individual: %d\n", total_novel);
   return (double)total_novel;
 }
+
 
 
 
@@ -5271,7 +5352,7 @@ static double compute_and_print_fitness(Individual* indiv, int index, const char
   if (!indiv) return 0.0;
   // indiv->fitness = compute_jaccard_distance(indiv->coverage_r, indiv->tc_count, seed_individual->coverage_r, seed_individual->tc_count);
   // indiv->fitness = compute_mmd_distance(indiv->coverage_r, indiv->tc_count, seed_individual->coverage_r, seed_individual->tc_count);
-  indiv->fitness = compute_coverage_novelty_multi(indiv, seed_individual);
+  indiv->fitness = compute_coverage_novelty_multi(indiv, index, seed_individual);
   if (!label || strlen(label) == 0) {
     label = "Individual";
   }
@@ -5328,28 +5409,60 @@ void destroy_population(Population* pop) {
   ck_free(pop);
 }
 
+// void update_seed_coverage_from_global(Individual* seed) {
+
+//   destroy_individual(seed);
+
+//   // 分配并初始化新的 coverage_r
+//   init_individual(seed, 1);
+//   for (int i = 0; i < MAP_SIZE; i++) {
+//     seed->coverage_r[0][i] = global_coverage[i];  // 记录当前全局覆盖
+//   }
+
+//   printf("[\033[1;33mStallHandler\033[0m] Updated seed_individual->coverage_r from global virgin_bits.\n");
+// }
+
 void update_seed_coverage_from_global(Individual* seed) {
-
   destroy_individual(seed);
-
-  // 分配并初始化新的 coverage_r
   init_individual(seed, 1);
+
+  int total_bits = 0;
   for (int i = 0; i < MAP_SIZE; i++) {
-    seed->coverage_r[0][i] = global_coverage[i];  // 记录当前全局覆盖
+    seed->coverage_r[0][i] = global_coverage[i];
+    total_bits += __builtin_popcount(global_coverage[i]);
   }
 
-  printf("[\033[1;33mStallHandler\033[0m] Updated seed_individual->coverage_r from global virgin_bits.\n");
+  // FILE* f = fopen(FITNESS_LOG_FILE, "a");
+  // if (!f) {
+  //   perror("fopen FITNESS_LOG_FILE");
+  //   return;
+  // }
+
+  // fprintf(f, "[StallHandler] Updated seed_individual->coverage_r from global_coverage.\n");
+  // fprintf(f, "[DEBUG] seed->tc_count = %d\n", seed->tc_count);
+  // fprintf(f, "[DEBUG] seed->coverage_r[0] ptr = %p\n", (void*)seed->coverage_r[0]);
+  // fprintf(f, "[DEBUG] Total bits set in global_coverage: %d\n", total_bits);
+
+  // // 打印前 10 个非零覆盖字节
+  // int printed = 0;
+  // for (int i = 0; i < MAP_SIZE && printed < 10; i++) {
+  //   if (global_coverage[i]) {
+  //     fprintf(f, "[DEBUG] global_coverage[%05d] = 0x%02x\n", i, global_coverage[i]);
+  //     printed++;
+  //   }
+  // }
+
+  // fclose(f);
 }
 
+
 static void run_individual(Individual* indiv, int index, char** use_argv) {
-  // printf("[\033[1;34mInfo\033[0m] Running individual %d with %d testcases...\n", index, indiv->tc_count);
+  printf("[\033[1;34mInfo\033[0m] Running individual %d with %d testcases...\n", index, indiv->tc_count);
 
   // printf("  [\033[1;36mTotal Testcase %d\033[0m] \n", indiv->tc_count);
   for (int i = 0; i < indiv->tc_count; i++) {
     TestCase* tc = &indiv->testcases[i];
-
-    // printf("  [\033[1;36mTestcase %d\033[0m] ", i);
-
+    
     if (!tc->need_run) {
       // printf("  [\033[1;36mTestcase %d\033[0m] \033[1;33m[Skipped]\033[0m Already evaluated.\n", i);
       indiv->coverage_r[i] = tc->coverage_ptr;
@@ -5358,6 +5471,18 @@ static void run_individual(Individual* indiv, int index, char** use_argv) {
 
     u8 ret = common_fuzz_stuff(use_argv, tc->data, tc->size);
 
+    // if (mark) {
+    //   FILE* f = fopen(FITNESS_LOG_FILE, "a");
+    //   if (!f) {
+    //     perror("fopen FITNESS_LOG_FILE");
+    //     return 0;
+    //   }
+    //   fprintf(f, "Individual %d Testcase #%d ...\n ", index, i);
+    //   fclose(f);
+    //   mark = false;
+    // }
+    
+
     if (ret == 1) {
       // 样本被 AFL 主动跳过，不记录覆盖信息
       memset(tc->coverage_ptr, 0, MAP_SIZE);
@@ -5365,6 +5490,15 @@ static void run_individual(Individual* indiv, int index, char** use_argv) {
       tc->need_run = 0;
       continue;
     }
+    if (ret_fault != FAULT_NONE) {
+      // 样本执行错误
+      memset(tc->coverage_ptr, 0, MAP_SIZE);
+      indiv->coverage_r[i] = tc->coverage_ptr;
+      tc->need_run = 0;
+      ret_fault = FAULT_NONE;
+      continue;
+    }
+
     // print_trace_bits();
     // print_virgin_bits();
 
@@ -5421,7 +5555,7 @@ Population* init_population(Individual* seed, int pop_size, char** use_argv) {
         (char*)seed->testcases[rand_idx].data,
         seed->testcases[rand_idx].size
       );
-      printf("    [\033[1;33mparse_py\033[0m] Testcase %d generated %d.\n", j, parsed);
+      // printf("    [\033[1;33mparse_py\033[0m] Testcase %d generated %d.\n", j, parsed);
 
       if (parsed > 1) {
         fuzz_py(&mutated_data0, &mutated_len0);
@@ -5429,7 +5563,7 @@ Population* init_population(Individual* seed, int pop_size, char** use_argv) {
 
       if (!mutated_data0 || mutated_len0 == 0) {
         // 复制种子数据
-        printf("    [\033[1;33mFallback\033[0m] Testcase %d: Mutation failed, using seed copy.\n", j);
+        // printf("    [\033[1;33mFallback\033[0m] Testcase %d: Mutation failed, using seed copy.\n", j);
         mutated_len = seed->testcases[j].size;
         mutated_data = ck_alloc(mutated_len);
         memcpy(mutated_data, seed->testcases[j].data, mutated_len);
@@ -5636,7 +5770,7 @@ Individual clone_individual(const Individual* src) {
 static int generation_counter = 0;  // 全局计数代数
 static void record_generation_fitness(double max_fitness) {
   printf("[\033[1;32mFitness\033[0m] Max fitness = %.4f\n", max_fitness);
-    // 获取当前时间戳（秒级），你也可以用 generation_counter 替代
+
     time_t now = time(NULL);
     FILE* f = fopen(FITNESS_LOG_FILE, "a");
     if (f) {
