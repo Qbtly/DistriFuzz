@@ -57,6 +57,7 @@
 #include <sys/ioctl.h>
 #include <sys/file.h>
 
+
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined (__OpenBSD__)
 #  include <sys/sysctl.h>
 #endif /* __APPLE__ || __FreeBSD__ || __OpenBSD__ */
@@ -311,10 +312,10 @@ typedef struct {
 
 static Population *pop;
 static Individual *seed_individual;
-// #define POP_SIZE 5
-// #define KEEP_SIZE 1
-#define POP_SIZE 15
-#define KEEP_SIZE 5
+#define POP_SIZE 3
+#define KEEP_SIZE 1
+// #define POP_SIZE 15
+// #define KEEP_SIZE 5
 #define SELECT_SIZE (POP_SIZE / 2)
 
 double prev_max_fitness = 0.0;
@@ -5238,23 +5239,52 @@ double compute_mmd_distance(uint8_t** coverage1, int count1,
 }
 
 
-double compute_jaccard_distance(uint8_t** cov1, int count1,
-  uint8_t** cov2, int count2) {
-  int union_count = 0, intersect_count = 0;
+static int generation_counter = 0;  // 全局计数代数
+static void record_generation_fitness(double max_fitness) {
+  printf("[\033[1;32mFitness\033[0m] Max fitness = %.4f\n", max_fitness);
 
-  for (int i = 0; i < MAP_SIZE; i++) {
-  uint8_t acc1 = 0, acc2 = 0;
+    time_t now = time(NULL);
+    FILE* f = fopen(FITNESS_LOG_FILE, "a");
+    if (f) {
+        fprintf(f, "%ld,%d,%.4f\n", now, generation_counter, max_fitness);
+        fclose(f);
+    } else {
+        perror("fopen fitness log");
+    }
+    generation_counter++;
+}
 
-  for (int j = 0; j < count1; j++) acc1 |= cov1[j][i];
-  for (int j = 0; j < count2; j++) acc2 |= cov2[j][i];
-
-  union_count     += __builtin_popcount(acc1 | acc2);
-  intersect_count += __builtin_popcount(acc1 & acc2);
+void init_fitness_log_file() {
+  // 尝试从环境变量中读取日志文件名
+  const char* log_env = getenv("FITNESS_LOG_FILE");
+  if (log_env) {
+    FITNESS_LOG_FILE = strdup(log_env);  // 拷贝一下，避免修改原始字符串
+    printf("[+] Using fitness log file: %s\n", FITNESS_LOG_FILE);
+  } else {
+    FITNESS_LOG_FILE = strdup("fitness_log(mmd).csv");  // 默认值也要 strdup
+    printf("[+] Using default fitness log file: %s\n", FITNESS_LOG_FILE);
   }
 
-  if (union_count == 0) return 1.0;
-  return 1.0 - ((double)intersect_count / union_count);
+  // 如果文件存在，先删除
+  if (access(FITNESS_LOG_FILE, F_OK) == 0) {
+    if (remove(FITNESS_LOG_FILE) == 0) {
+      printf("[+] Existing log file deleted.\n");
+    } else {
+      perror("[-] Failed to delete existing log file");
+    }
+  }
+
+  // 创建空文件
+  FILE* fp = fopen(FITNESS_LOG_FILE, "w");
+  if (!fp) {
+    perror("[-] Failed to create log file");
+    exit(1);
+  }
+  fprintf(fp, "Timestamp,Generation,Max_Fitness\n");
+  fclose(fp);
+  record_generation_fitness(0.0);
 }
+
 
 int count_novel_bits_multi(uint8_t* indiv_cov, int ind_index, uint8_t** seed_covs, int seed_count, int tc_index) {
   int novel = 0;
@@ -5273,76 +5303,34 @@ int count_novel_bits_multi(uint8_t* indiv_cov, int ind_index, uint8_t** seed_cov
     int count = __builtin_popcount(new_bits);
     novel += count;
   }
-  // FILE* f = fopen(FITNESS_LOG_FILE, "a");
-  // if (!f) {
-  //   perror("fopen FITNESS_LOG_FILE");
-  //   return 0;
-  // }
-  // if (novel > 0) {
-  //   fprintf(f, "\n=== Individual %d Testcase #%d ===\n", ind_index, tc_index);
-  //   fprintf(f, "[SEED] Total bits in seed_union: %d\n", seed_union_bits);
-  //   fprintf(f, "[RESULT] Total novel bits for this testcase = %d\n", novel);
-  //   // 打印 global_coverage 状态
-  //   int global_bits = 0;
-  //   for (int i = 0; i < MAP_SIZE; i++) {
-  //     global_bits += __builtin_popcount(global_coverage[i]);
-  //   }
-  //   fprintf(f, "[GLOBAL] Total bits set in global_coverage: %d\n", global_bits);
-  //   fprintf(f, "[GLOBAL] First 64 bytes of global_coverage:\n");
-  //   for (int i = 0; i < 64; i++) {
-  //     fprintf(f, "%02x ", global_coverage[i]);
-  //     if ((i + 1) % 16 == 0) fprintf(f, "\n");
-  //   }
-  // }
-  // if (novel > 100000) {
-  //   fprintf(f, "[WARNING] Extremely high novel value (%d) for testcase #%d\n", novel, tc_index);
-  //   fprintf(f, "[DUMP] First 64 bytes of indiv_cov:\n");
-  //   for (int k = 0; k < 64; k++) {
-  //     fprintf(f, "%02x ", indiv_cov[k]);
-  //     if ((k + 1) % 16 == 0) fprintf(f, "\n");
-  //   }
-  //   // 打印 global_coverage 状态
-  //   int global_bits = 0;
-  //   for (int i = 0; i < MAP_SIZE; i++) {
-  //     global_bits += __builtin_popcount(global_coverage[i]);
-  //   }
-  //   fprintf(f, "[GLOBAL] Total bits set in global_coverage: %d\n", global_bits);
-  //   fprintf(f, "[GLOBAL] First 64 bytes of global_coverage:\n");
-  //   for (int i = 0; i < 64; i++) {
-  //     fprintf(f, "%02x ", global_coverage[i]);
-  //     if ((i + 1) % 16 == 0) fprintf(f, "\n");
-  //   }
-  // }
-
-  // fclose(f);
   return novel;
 }
 
 
 
-double compute_coverage_novelty_multi(Individual* indiv, int index, Individual* seed) {
-  if (!indiv || !seed || !seed->coverage_r) return 0.0;
+// double compute_coverage_novelty_multi(Individual* indiv, int index, Individual* seed) {
+//   if (!indiv || !seed || !seed->coverage_r) return 0.0;
 
-  int total_novel = 0;
+//   int total_novel = 0;
 
-  for (int i = 0; i < indiv->tc_count; i++) {
+//   for (int i = 0; i < indiv->tc_count; i++) {
     
-    int tc_novel = count_novel_bits_multi(indiv->coverage_r[i], index, seed->coverage_r, seed->tc_count, i);
-    if (tc_novel > 0) {
-      printf("\n=== Individual %d Testcase #%d ===\n", index, i);
-      printf("[INFO] Novel bits for testcase[%d] = %d\n", i, tc_novel);
-    }
-    total_novel += tc_novel;
-  }
+//     int tc_novel = count_novel_bits_multi(indiv->coverage_r[i], index, seed->coverage_r, seed->tc_count, i);
+//     if (tc_novel > 0) {
+//       printf("\n=== Individual %d Testcase #%d ===\n", index, i);
+//       printf("[INFO] Novel bits for testcase[%d] = %d\n", i, tc_novel);
+//     }
+//     total_novel += tc_novel;
+//   }
 
-  printf("[TOTAL] Novelty for individual: %d\n", total_novel);
-  return (double)total_novel;
-}
+//   printf("[TOTAL] Novelty for individual: %d\n", total_novel);
+//   return (double)total_novel;
+// }
 
 
 
 // 计算与 seed 的总 novel bits
-int compute_total_novel_bits(Individual* indiv, int index, Individual* seed) {
+double compute_total_novel_bits(Individual* indiv, int index, Individual* seed) {
   if (!indiv || !seed || !seed->coverage_r) return 0;
   int total_novel = 0;
 
@@ -5381,18 +5369,76 @@ double compute_avg_jaccard_distance(Individual* indiv, Individual* seed) {
   return total_distance / (m * n);  // 平均 Jaccard 距离
 }
 
+// 简化版 MMD 距离计算：E[XX] + E[YY] - 2E[XY]
+double compute_avg_mmd_distance(Individual* indiv, Individual* seed) {
+  if (!indiv || !seed || !seed->coverage_r) return 0.0;
+
+  int m = indiv->tc_count;
+  int n = seed->tc_count;
+  int dim = MAP_SIZE;
+
+  double sum_xx = 0.0, sum_yy = 0.0, sum_xy = 0.0;
+
+  // E[XX]
+  for (int i = 0; i < m; i++) {
+    for (int j = 0; j < m; j++) {
+      for (int d = 0; d < dim; d++) {
+        uint8_t a = indiv->coverage_r[i][d] > 0;
+        uint8_t b = indiv->coverage_r[j][d] > 0;
+        sum_xx += (a * b);
+      }
+    }
+  }
+
+  // E[YY]
+  for (int i = 0; i < n; i++) {
+    for (int j = 0; j < n; j++) {
+      for (int d = 0; d < dim; d++) {
+        uint8_t a = seed->coverage_r[i][d] > 0;
+        uint8_t b = seed->coverage_r[j][d] > 0;
+        sum_yy += (a * b);
+      }
+    }
+  }
+
+  // E[XY]
+  for (int i = 0; i < m; i++) {
+    for (int j = 0; j < n; j++) {
+      for (int d = 0; d < dim; d++) {
+        uint8_t a = indiv->coverage_r[i][d] > 0;
+        uint8_t b = seed->coverage_r[j][d] > 0;
+        sum_xy += (a * b);
+      }
+    }
+  }
+
+  double exx = sum_xx / (m * m);
+  double eyy = sum_yy / (n * n);
+  double exy = sum_xy / (m * n);
+
+  double mmd = exx + eyy - 2.0 * exy;
+  return mmd;
+}
+
+
 // 综合计算适应度
 double compute_combined_fitness(Individual* indiv, int index, Individual* seed) {
   double total_novel = compute_total_novel_bits(indiv, index, seed);
-  double jaccard_score = compute_avg_jaccard_distance(indiv, seed);
+  // double distance = compute_avg_jaccard_distance(indiv, seed);
+  // double distance = compute_avg_mmd_distance(indiv, seed);  // 替换成 MMD
+  double distance = compute_mmd_distance(indiv->coverage_r, indiv->tc_count, seed->coverage_r, seed->tc_count);
 
   double alpha = 0.7;  // novel 的权重
   double beta = 0.3;   // jaccard 的权重
 
-  double fitness = alpha * total_novel + beta * jaccard_score;
+  double fitness = alpha * total_novel + beta * distance;
 
-  printf("[FITNESS] Individual %d: Novel = %d, Jaccard = %.4f, Combined = %.4f\n",
-         index, total_novel, jaccard_score, fitness);
+  // printf("[FITNESS] Individual %d: Novel = %d, Jaccard = %.4f, Combined = %.4f\n",
+  //        index, total_novel, distance, fitness);
+  printf("[\033[1;32mFitness\033[0m] Novel = %.4f, MMD = %.4f, Combined = %.4f\n",
+         total_novel, distance, fitness);
+  // printf("[FITNESS] Individual %d: aNovel = %.4f, bMMD = %.4f, Combined = %.4f\n",
+  //       index, alpha * total_novel, beta * distance, alpha * total_novel + beta * distance);
 
   return fitness;
 }
@@ -5406,7 +5452,7 @@ static double compute_and_print_fitness(Individual* indiv, int index, const char
   // indiv->fitness = compute_mmd_distance(indiv->coverage_r, indiv->tc_count, seed_individual->coverage_r, seed_individual->tc_count);
   // indiv->fitness = compute_coverage_novelty_multi(indiv, index, seed_individual);
   indiv->fitness = compute_combined_fitness(indiv, index, seed_individual);
-  
+  // printf("[FITNESS] Individual %d: Combined = %.4f\n", index, compute_combined_fitness(indiv, index, seed_individual));
   if (!label || strlen(label) == 0) {
     label = "Individual";
   }
@@ -5473,27 +5519,6 @@ void update_seed_coverage_from_global(Individual* seed) {
     total_bits += __builtin_popcount(global_coverage[i]);
   }
 
-  // FILE* f = fopen(FITNESS_LOG_FILE, "a");
-  // if (!f) {
-  //   perror("fopen FITNESS_LOG_FILE");
-  //   return;
-  // }
-
-  // fprintf(f, "[StallHandler] Updated seed_individual->coverage_r from global_coverage.\n");
-  // fprintf(f, "[DEBUG] seed->tc_count = %d\n", seed->tc_count);
-  // fprintf(f, "[DEBUG] seed->coverage_r[0] ptr = %p\n", (void*)seed->coverage_r[0]);
-  // fprintf(f, "[DEBUG] Total bits set in global_coverage: %d\n", total_bits);
-
-  // // 打印前 10 个非零覆盖字节
-  // int printed = 0;
-  // for (int i = 0; i < MAP_SIZE && printed < 10; i++) {
-  //   if (global_coverage[i]) {
-  //     fprintf(f, "[DEBUG] global_coverage[%05d] = 0x%02x\n", i, global_coverage[i]);
-  //     printed++;
-  //   }
-  // }
-
-  // fclose(f);
 }
 
 
@@ -5808,20 +5833,7 @@ Individual clone_individual(const Individual* src) {
   return clone;
 }
 
-static int generation_counter = 0;  // 全局计数代数
-static void record_generation_fitness(double max_fitness) {
-  printf("[\033[1;32mFitness\033[0m] Max fitness = %.4f\n", max_fitness);
 
-    time_t now = time(NULL);
-    FILE* f = fopen(FITNESS_LOG_FILE, "a");
-    if (f) {
-        fprintf(f, "%ld,%d,%.4f\n", now, generation_counter, max_fitness);
-        fclose(f);
-    } else {
-        perror("fopen fitness log");
-    }
-    generation_counter++;
-}
 
 void sort_individuals_by_fitness(Individual* individuals, int count) {
   printf("[\033[1;34mSort\033[0m] Sorting %d individuals by fitness (descending)...\n", count);
@@ -5943,7 +5955,7 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
     stall_generations = 0;
     prev_max_fitness = cur_max_fitness;
   }
-  if (stall_generations >= 2) {
+  if (stall_generations >= 5) {
     printf("[\033[1;33mWarning\033[0m] Stalling detected. Updating seed coverage...\n");
     update_seed_coverage_from_global(seed_individual);
     stall_generations = 0; //reset
@@ -5952,14 +5964,17 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
       compute_and_print_fitness(&pop->individuals[i], i+1, NULL);
     }
     sort_individuals_by_fitness(pop->individuals, pop->count);
+    
     // 记录当代最高 fitness 到日志文件
     FILE* f = fopen(FITNESS_LOG_FILE, "a");
     if (f) {
-        fprintf(f, "Need to update! New fitness: %.4f\n", pop->individuals[0].fitness);
+        fprintf(f, "Need to update! Before: %.4f | New fitness: %.4f\n", prev_max_fitness, pop->individuals[0].fitness);
         fclose(f);
     } else {
         perror("fopen fitness log");
     }
+    prev_max_fitness = pop->individuals[0].fitness;
+    
   }
   
   // printf("[\033[1;32mFitness\033[0m] Max fitness = %.4f\n", cur_max_fitness);
@@ -9128,14 +9143,15 @@ int main(int argc, char** argv) {
 
   /* Distri */
   // 尝试从环境变量中读取日志文件名
-  const char* log_env = getenv("FITNESS_LOG_FILE");
-  if (log_env) {
-    FITNESS_LOG_FILE = strdup(log_env);  // 拷贝一下，避免修改原始字符串
-    printf("[+] Using fitness log file: %s\n", FITNESS_LOG_FILE);
-  } else {
-    FITNESS_LOG_FILE = "fitness_log(mmd).csv";  // 默认值
-    printf("[+] Using default fitness log file: %s\n", FITNESS_LOG_FILE);
-  }
+  // const char* log_env = getenv("FITNESS_LOG_FILE");
+  // if (log_env) {
+  //   FITNESS_LOG_FILE = strdup(log_env);  // 拷贝一下，避免修改原始字符串
+  //   printf("[+] Using fitness log file: %s\n", FITNESS_LOG_FILE);
+  // } else {
+  //   FITNESS_LOG_FILE = "fitness_log(mmd).csv";  // 默认值
+  //   printf("[+] Using default fitness log file: %s\n", FITNESS_LOG_FILE);
+  // }
+  init_fitness_log_file();
   ACTF("Building initial population from queue...");
   memset(global_coverage, 0, MAP_SIZE);
   seed_individual = build_individual_from_queue();

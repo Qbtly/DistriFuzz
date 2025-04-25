@@ -69,7 +69,7 @@ def plot_trend_comparison(fitness_log, plot_data_file, save_path, title):
 
     # X轴时间刻度
     max_time = max(max(elapsed_minutes_fitness), df["minutes_elapsed"].max())
-    xticks = np.arange(0, max_time + 1, 60)
+    xticks = np.arange(0, max_time + 1, 240)
     plt.xticks(xticks, rotation=45)
 
 
@@ -78,21 +78,35 @@ def plot_trend_comparison(fitness_log, plot_data_file, save_path, title):
     # plt.show()
 
 plot_trend_comparison(
-    "/home/DistriFuzz/Distri/logs/fitness_jerry_test2.csv",
-    "/home/out-distri/jerry-test/2/plot_data",
-    "fp_jerry_test2.png",
+    "/home/DistriFuzz/Distri/logs/fitness_jerry_test4.csv",
+    "/home/out-distri/jerry-test/4/plot_data",
+    "fp_jerry_test4.png",
     "Jerry: Fitness vs AFL Paths Over Time"
 )
+# plot_trend_comparison(
+#     "/home/DistriFuzz/Distri/logs/fitness_jerry_test3.csv",
+#     "/home/out-distri/jerry-test/3/plot_data",
+#     "fp_jerry_test3.png",
+#     "Jerry: Fitness vs AFL Paths Over Time"
+# )
 plot_trend_comparison(
-    "/home/DistriFuzz/Distri/logs/fitness_jerry_test3.csv",
-    "/home/out-distri/jerry-test/3/plot_data",
-    "fp_jerry_test3.png",
+    "/home/DistriFuzz/Distri/logs/fitness_jsc_test4.csv",
+    "/home/out-distri/jsc-test/4/plot_data",
+    "fp_jsc_test4.png",
     "Jerry: Fitness vs AFL Paths Over Time"
 )
+
 plot_trend_comparison(
-    "/home/DistriFuzz/Distri/logs/fitness_jsc_test2.csv",
-    "/home/out-distri/jsc-test/2/plot_data",
-    "fp_jsc_test2.png",
+    "/home/DistriFuzz/Distri/logs/fitness_jsc_test5.csv",
+    "/home/out-distri/jsc-test/5/plot_data",
+    "fp_jsc_test5.png",
+    "Jerry: Fitness vs AFL Paths Over Time"
+)
+
+plot_trend_comparison(
+    "/home/DistriFuzz/Distri/logs/fitness_jsc_test7.csv",
+    "/home/out-distri/jsc-test/7/plot_data",
+    "fp_jsc_test7.png",
     "Jerry: Fitness vs AFL Paths Over Time"
 )
 
