@@ -312,10 +312,10 @@ typedef struct {
 
 static Population *pop;
 static Individual *seed_individual;
-#define POP_SIZE 3
-#define KEEP_SIZE 1
-// #define POP_SIZE 15
-// #define KEEP_SIZE 5
+// #define POP_SIZE 5
+// #define KEEP_SIZE 2
+#define POP_SIZE 15
+#define KEEP_SIZE 5
 #define SELECT_SIZE (POP_SIZE / 2)
 
 double prev_max_fitness = 0.0;
@@ -325,6 +325,14 @@ EXP_ST u8 global_coverage[MAP_SIZE];
 
 // 修改为变量并初始化为默认值
 char* FITNESS_LOG_FILE = NULL;
+
+double g_max_novel = 0.0;
+double g_max_mmd = 0.0;
+static int generation_counter = 0;  // 全局计数代数
+// 记录上一代的 max_novel 和 max_mmd
+static double prev_max_novel = 0.0;
+static double prev_max_mmd = 0.0;
+
 
 /* Fuzzing stages */
 
@@ -5239,20 +5247,20 @@ double compute_mmd_distance(uint8_t** coverage1, int count1,
 }
 
 
-static int generation_counter = 0;  // 全局计数代数
-static void record_generation_fitness(double max_fitness) {
-  printf("[\033[1;32mFitness\033[0m] Max fitness = %.4f\n", max_fitness);
+static void record_generation_fitness() {
+  printf("[\033[1;32mFitness\033[0m] Max Novel = %.1f, Max MMD = %.6f\n", g_max_novel, g_max_mmd);
 
-    time_t now = time(NULL);
-    FILE* f = fopen(FITNESS_LOG_FILE, "a");
-    if (f) {
-        fprintf(f, "%ld,%d,%.4f\n", now, generation_counter, max_fitness);
-        fclose(f);
-    } else {
-        perror("fopen fitness log");
-    }
-    generation_counter++;
+  time_t now = time(NULL);
+  FILE* f = fopen(FITNESS_LOG_FILE, "a");
+  if (f) {
+      fprintf(f, "%ld,%d,%.1f,%.6f\n", now, generation_counter, g_max_novel, g_max_mmd);
+      fclose(f);
+  } else {
+      perror("fopen fitness log");
+  }
+  generation_counter++;
 }
+
 
 void init_fitness_log_file() {
   // 尝试从环境变量中读取日志文件名
@@ -5280,9 +5288,9 @@ void init_fitness_log_file() {
     perror("[-] Failed to create log file");
     exit(1);
   }
-  fprintf(fp, "Timestamp,Generation,Max_Fitness\n");
+  // fprintf(fp, "Timestamp, Generation, max_novel, max_mmd\n");
   fclose(fp);
-  record_generation_fitness(0.0);
+  record_generation_fitness();
 }
 
 
@@ -5329,18 +5337,29 @@ int count_novel_bits_multi(uint8_t* indiv_cov, int ind_index, uint8_t** seed_cov
 
 
 
-// 计算与 seed 的总 novel bits
+// 计算与 seed 的总 novel bits（带详细输出）
 double compute_total_novel_bits(Individual* indiv, int index, Individual* seed) {
-  if (!indiv || !seed || !seed->coverage_r) return 0;
+  if (!indiv || !seed || !seed->coverage_r) {
+    printf("[\033[1;31mError\033[0m] NULL pointer passed to compute_total_novel_bits.\n");
+    return 0.0;
+  }
+
   int total_novel = 0;
+
+  // printf("[\033[1;36mDebug\033[0m] Computing total novel bits for Individual #%d...\n", index);
+  // printf("[\033[1;36mDebug\033[0m] Individual has %d testcases.\n", indiv->tc_count);
 
   for (int i = 0; i < indiv->tc_count; i++) {
     int tc_novel = count_novel_bits_multi(indiv->coverage_r[i], index, seed->coverage_r, seed->tc_count, i);
+    // printf("[\033[1;36mDebug\033[0m] Testcase #%d novel bits = %d\n", i, tc_novel);
     total_novel += tc_novel;
   }
 
+  // printf("[\033[1;32mResult\033[0m] Individual #%d total novel bits = %d\n", index, total_novel);
+
   return (double)total_novel;
 }
+
 
 // 计算平均 Jaccard 距离（每个 test case 与所有 seed testcases 距离的平均值）
 double compute_avg_jaccard_distance(Individual* indiv, Individual* seed) {
@@ -5412,10 +5431,10 @@ double compute_avg_mmd_distance(Individual* indiv, Individual* seed) {
     }
   }
 
-  double exx = sum_xx / (m * m);
-  double eyy = sum_yy / (n * n);
-  double exy = sum_xy / (m * n);
-
+  double exx = m ? (sum_xx / (m * m)) : 0.0;
+  double eyy = n ? (sum_yy / (n * n)) : 0.0;
+  double exy = (m && n) ? (sum_xy / (m * n)) : 0.0;
+  
   double mmd = exx + eyy - 2.0 * exy;
   return mmd;
 }
@@ -5426,32 +5445,26 @@ double compute_combined_fitness(Individual* indiv, int index, Individual* seed) 
   double total_novel = compute_total_novel_bits(indiv, index, seed);
   // double distance = compute_avg_jaccard_distance(indiv, seed);
   // double distance = compute_avg_mmd_distance(indiv, seed);  // 替换成 MMD
-  double distance = compute_mmd_distance(indiv->coverage_r, indiv->tc_count, seed->coverage_r, seed->tc_count);
+  // double distance = compute_mmd_distance(indiv->coverage_r, indiv->tc_count, seed->coverage_r, seed->tc_count);
 
-  double alpha = 0.7;  // novel 的权重
-  double beta = 0.3;   // jaccard 的权重
+  // double alpha = 0.7;  // novel 的权重
+  // double beta = 0.3;   // jaccard 的权重
 
-  double fitness = alpha * total_novel + beta * distance;
+  // double fitness = alpha * total_novel + beta * distance;
+  // printf("[\033[1;32mFitness\033[0m] Novel = %.4f, MMD = %.4f, Combined = %.4f\n",
+  //   total_novel, distance, fitness);
 
-  // printf("[FITNESS] Individual %d: Novel = %d, Jaccard = %.4f, Combined = %.4f\n",
-  //        index, total_novel, distance, fitness);
-  printf("[\033[1;32mFitness\033[0m] Novel = %.4f, MMD = %.4f, Combined = %.4f\n",
-         total_novel, distance, fitness);
-  // printf("[FITNESS] Individual %d: aNovel = %.4f, bMMD = %.4f, Combined = %.4f\n",
-  //       index, alpha * total_novel, beta * distance, alpha * total_novel + beta * distance);
-
-  return fitness;
+  printf("[\033[1;32mFitness\033[0m] Novel = %.4f\n",
+         total_novel);
+  return total_novel;
 }
-
-
-
 
 static double compute_and_print_fitness(Individual* indiv, int index, const char* label) {
   if (!indiv) return 0.0;
   // indiv->fitness = compute_jaccard_distance(indiv->coverage_r, indiv->tc_count, seed_individual->coverage_r, seed_individual->tc_count);
   // indiv->fitness = compute_mmd_distance(indiv->coverage_r, indiv->tc_count, seed_individual->coverage_r, seed_individual->tc_count);
   // indiv->fitness = compute_coverage_novelty_multi(indiv, index, seed_individual);
-  indiv->fitness = compute_combined_fitness(indiv, index, seed_individual);
+  // indiv->fitness = compute_combined_fitness(indiv, index, seed_individual);
   // printf("[FITNESS] Individual %d: Combined = %.4f\n", index, compute_combined_fitness(indiv, index, seed_individual));
   if (!label || strlen(label) == 0) {
     label = "Individual";
@@ -5509,18 +5522,8 @@ void destroy_population(Population* pop) {
   ck_free(pop);
 }
 
-void update_seed_coverage_from_global(Individual* seed) {
-  destroy_individual(seed);
-  init_individual(seed, 1);
 
-  int total_bits = 0;
-  for (int i = 0; i < MAP_SIZE; i++) {
-    seed->coverage_r[0][i] = global_coverage[i];
-    total_bits += __builtin_popcount(global_coverage[i]);
-  }
-
-}
-
+/*----------------------------------------Distri----------------------------------------*/
 
 static void run_individual(Individual* indiv, int index, char** use_argv) {
   printf("[\033[1;34mInfo\033[0m] Running individual %d with %d testcases...\n", index, indiv->tc_count);
@@ -5573,17 +5576,206 @@ static void run_individual(Individual* indiv, int index, char** use_argv) {
     indiv->coverage_r[i] = tc->coverage_ptr;
     tc->need_run = 0;
     
-    for (int i = 0; i < MAP_SIZE; i++) {
-      global_coverage[i] = ~virgin_bits[i];
-    }
+    // for (int i = 0; i < MAP_SIZE; i++) {
+    //   global_coverage[i] = ~virgin_bits[i];
+    // }
     // save_testcase_sample(index, i, tc->data, tc->size);
   }
   // 计算并记录 fitness 值
-  compute_and_print_fitness(indiv, index, NULL);
+  // compute_and_print_fitness(indiv, index, NULL);
 
   // printf("[\033[1;34mInfo\033[0m] Done running individual.\n");
 }
 
+void update_seed(Individual* seed, char** use_argv) {
+  int total_paths = queued_paths;
+
+  if (total_paths == 0) {
+    fprintf(stderr, "No entries in AFL queue!\n");
+    exit(1);
+  }
+
+  int sample_count = total_paths >= 300 ? 300 : (total_paths / 2);
+  if (sample_count < 1) sample_count = 1;
+
+  destroy_individual(seed);
+  init_individual(seed, sample_count);
+
+  // 构建 queue_entry 数组，便于随机选取
+  struct queue_entry** queue_array = ck_alloc(sizeof(struct queue_entry*) * total_paths);
+  struct queue_entry* q = queue;
+  int idx = 0;
+  while (q) {
+    queue_array[idx++] = q;
+    q = q->next;
+  }
+
+  for (int i = 0; i < sample_count; i++) {
+    int chosen = rand() % total_paths;
+    struct queue_entry* entry = queue_array[chosen];
+
+    // 避免重复
+    queue_array[chosen] = queue_array[total_paths - 1];
+    total_paths--;
+
+    // 加载样本数据
+    int fd = open(entry->fname, O_RDONLY);
+    if (fd < 0) {
+      PFATAL("Failed to open seed sample: %s", entry->fname);
+    }
+
+    u8* buf = ck_alloc_nozero(entry->len);
+    if (read(fd, buf, entry->len) != entry->len) {
+      PFATAL("Short read from seed file: %s", entry->fname);
+    }
+    close(fd);
+
+    // 写入 seed 中
+    seed->testcases[i].data = buf;
+    seed->testcases[i].size = entry->len;
+    seed->testcases[i].fname = ck_strdup(entry->fname);
+  }
+
+  ck_free(queue_array);
+
+  // 运行所有 testcase 并记录 coverage
+  run_individual(seed, 0, use_argv);  
+
+  printf("[\033[1;34mInfo\033[0m] Seed individual updated with %d random samples from queue.\n", sample_count);
+}
+
+
+void  evaluate_population_normalized(Individual* individuals, int count, Individual* seed, double alpha, double beta) {
+  if (!individuals || count <= 0 || !seed) {
+    printf("[\033[1;31mError\033[0m] Invalid arguments to  evaluate_population_normalized.\n");
+    return;
+  }
+
+  printf("[\033[1;36mDebug\033[0m] Evaluating %d individuals...\n", count);
+
+  double* novel_values = ck_alloc(sizeof(double) * count);
+  double* mmd_values   = ck_alloc(sizeof(double) * count);
+  double max_novel = 0.0;
+  double max_mmd = 0.0;
+  
+  // === 第一次扫描：计算 raw novel 和 mmd，并记录最大值 ===
+  for (int i = 0; i < count; i++) {
+    double total_novel = compute_total_novel_bits(&individuals[i], i+1, seed);
+    double mmd = compute_avg_mmd_distance(&individuals[i], seed);
+
+    novel_values[i] = total_novel;
+    mmd_values[i] = mmd;
+
+    if (total_novel > max_novel) max_novel = total_novel;
+    if (mmd > max_mmd) max_mmd = mmd;
+
+    printf("[\033[1;36mDebug\033[0m] #%03d | Novel = %.1f | MMD = %.6f\n", i, total_novel, mmd);
+  }
+
+  // 防止除以 0
+  if (max_novel < 1e-6) {
+    printf("[\033[1;31mWarning\033[0m] max_novel too small, setting to 1e-6\n");
+    max_novel = 1e-6;
+  }
+  if (max_mmd < 1e-6) {
+    printf("[\033[1;31mWarning\033[0m] max_mmd too small, setting to 1e-6\n");
+    max_mmd = 1e-6;
+  }
+
+  printf("[\033[1;36mDebug\033[0m] Max Novel = %.1f, Max MMD = %.6f\n", max_novel, max_mmd);
+  g_max_novel = max_novel;
+  g_max_mmd = max_mmd;
+
+  double sum_fitness = 0.0;
+  double max_fitness = -1e9;
+  double sum_sq_fitness = 0.0;
+
+  // === 第二次扫描：归一化并赋值 fitness ===
+  for (int i = 0; i < count; i++) {
+    double norm_novel = novel_values[i] / max_novel;
+    double norm_mmd   = mmd_values[i] / max_mmd;
+
+    double fitness = alpha * norm_novel + beta * norm_mmd;
+    individuals[i].fitness = fitness;
+
+    printf("[\033[1;32mFitness\033[0m] #%03d | Norm Novel = %.3f | Norm MMD = %.3f | Combined = %.6f\n",
+           i, norm_novel, norm_mmd, fitness);
+
+    sum_fitness += fitness;
+    sum_sq_fitness += fitness * fitness;
+    if (fitness > max_fitness) {
+      max_fitness = fitness;
+    }
+  }
+
+  double avg_fitness = sum_fitness / count;
+  double variance = (sum_sq_fitness / count) - (avg_fitness * avg_fitness);
+  if (variance < 0.0) variance = 0.0;
+
+  // printf("[\033[1;35mSummary\033[0m] Individuals = %d\n", count);
+  // printf("[\033[1;35mSummary\033[0m] Average Fitness = %.6f\n", avg_fitness);
+  // printf("[\033[1;35mSummary\033[0m] Max Fitness = %.6f\n", max_fitness);
+  // printf("[\033[1;35mSummary\033[0m] Fitness Variance = %.8f\n", variance);
+
+  ck_free(novel_values);
+  ck_free(mmd_values);
+
+  printf("[\033[1;36mDebug\033[0m] Freed temporary arrays.\n");
+}
+
+
+
+void check_stall_and_update(Population* pop, Individual* seed_individual, char** use_argv) {
+  // 判断是否 stall
+  double EPSILON_NOVEL = 0.001 * prev_max_novel;
+  double EPSILON_MMD = 0.001 * prev_max_mmd;
+
+  int novel_stalled = fabs(g_max_novel - prev_max_novel) < EPSILON_NOVEL;
+  int mmd_stalled   = fabs(g_max_mmd - prev_max_mmd) < EPSILON_MMD;
+
+  printf("[\033[1;36mDebug\033[0m] Prev Novel = %.4f, Current Novel = %.4f, Δ = %.6f (EPS = %.6f)\n",
+         prev_max_novel, g_max_novel, fabs(g_max_novel - prev_max_novel), EPSILON_NOVEL);
+
+  printf("[\033[1;36mDebug\033[0m] Prev MMD = %.6f, Current MMD = %.6f, Δ = %.6f (EPS = %.6f)\n",
+         prev_max_mmd, g_max_mmd, fabs(g_max_mmd - prev_max_mmd), EPSILON_MMD);
+
+  if (novel_stalled && mmd_stalled) {
+    stall_generations++;
+    printf("[\033[1;33mWarning\033[0m] Stall detected! stall_generations = %d\n", stall_generations);
+  } else {
+    stall_generations = 0;
+  }
+
+  // 更新历史记录
+  prev_max_novel = g_max_novel;
+  prev_max_mmd = g_max_mmd;
+
+  // 触发 seed 更新
+  if (stall_generations >= 5) {
+    printf("[\033[1;33mWarning\033[0m] Stalling detected for 5 generations. Updating seed coverage...\n");
+
+    update_seed(seed_individual, use_argv);
+    stall_generations = 0; // reset
+
+    // 重新计算适应度
+    evaluate_population_normalized(pop->individuals, pop->count, seed_individual, 0.7, 0.3);
+    sort_individuals_by_fitness(pop->individuals, pop->count);
+
+    // 记录更新日志
+    FILE* f = fopen(FITNESS_LOG_FILE, "a");
+    if (f) {
+        fprintf(f, "Need to update! After update: Max Novel = %.4f | Max MMD = %.6f\n",
+                g_max_novel, g_max_mmd);
+        fclose(f);
+    } else {
+        perror("fopen fitness log");
+    }
+
+    // 更新 prev_* 以防止立即再次触发
+    prev_max_novel = g_max_novel;
+    prev_max_mmd = g_max_mmd;
+  }
+}
 
 Population* init_population(Individual* seed, int pop_size, char** use_argv) {
   if (!seed || seed->tc_count == 0) {
@@ -5671,15 +5863,10 @@ Individual* build_individual_from_queue() {
   printf("[\033[1;34mInfo\033[0m] Building individual from AFL queue (%d entries)...\n", count);
 
   Individual* indiv = ck_alloc(sizeof(Individual));
-  indiv->tc_count = count;
-  indiv->testcases = ck_alloc(sizeof(TestCase) * count);
-  indiv->coverage_r = ck_alloc(sizeof(uint8_t*) * count);
-  indiv->fitness = 0.0;
+  init_individual(indiv, count);
 
   int i = 0;
   while (q) {
-    // printf("  [\033[1;36mTestcase %d\033[0m] Loading file: %s\n", i, q->fname);
-
     s32 fd = open(q->fname, O_RDONLY);
     if (fd < 0) {
       PFATAL("Unable to open seed file: %s", q->fname);
@@ -5692,15 +5879,7 @@ Individual* build_individual_from_queue() {
     }
     close(fd);
 
-    indiv->testcases[i].coverage_ptr = ck_alloc(MAP_SIZE);
-    memset(indiv->testcases[i].coverage_ptr, 0, MAP_SIZE);
-    indiv->testcases[i].need_run = 1;
-
-    indiv->testcases[i].fname = ck_strdup(q->fname);  // optional
-    indiv->coverage_r[i] = indiv->testcases[i].coverage_ptr;
-
-    // printf("    \033[0;32m✔ Loaded\033[0m (%u bytes)\n", q->len);
-
+    indiv->testcases[i].fname = ck_strdup(q->fname);
     q = q->next;
     i++;
   }
@@ -5708,6 +5887,7 @@ Individual* build_individual_from_queue() {
   printf("[\033[1;34mInfo\033[0m] Done building individual from queue.\n");
   return indiv;
 }
+
 
 
 void crossover_individuals(Individual* p1, Individual* p2, Individual* child) {
@@ -5852,6 +6032,12 @@ void sort_individuals_by_fitness(Individual* individuals, int count) {
   printf("[\033[1;32mTop\033[0m] Best fitness after sort: %.4f\n", individuals[0].fitness);
 }
 
+
+
+
+
+
+
 /* Distri */
 static u8 fuzz_population(Population* pop, char** use_argv) {
 
@@ -5916,6 +6102,9 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
   }
   ck_free(offspring);
 
+  // === 统一归一化所有个体 fitness ===
+  evaluate_population_normalized(merged, total, seed_individual, 0.7, 0.3);
+
   // 排序所有个体
   sort_individuals_by_fitness(merged, total);
 
@@ -5942,40 +6131,41 @@ static u8 fuzz_population(Population* pop, char** use_argv) {
   ck_free(merged);
 
   // 当前种群经过排序后，第 0 个 fitness 最大
-  double cur_max_fitness = pop->individuals[0].fitness;
+  // double cur_max_fitness = pop->individuals[0].fitness;
   // printf("[\033[1;32mFitness\033[0m] Max fitness = %.4f\n", cur_max_fitness);
   // 记录当代最高 fitness 到日志文件
-  record_generation_fitness(cur_max_fitness);
-
+  record_generation_fitness();
+  check_stall_and_update(pop, seed_individual, use_argv);
   //检测是否该更新seed fitness
-  double EPSILON = 0.001 * prev_max_fitness;
-  if (fabs(cur_max_fitness - prev_max_fitness) < EPSILON) {
-    stall_generations++;
-  } else {
-    stall_generations = 0;
-    prev_max_fitness = cur_max_fitness;
-  }
-  if (stall_generations >= 5) {
-    printf("[\033[1;33mWarning\033[0m] Stalling detected. Updating seed coverage...\n");
-    update_seed_coverage_from_global(seed_individual);
-    stall_generations = 0; //reset
-    // 重新计算所有个体的适应度（参考新的 seed_individual）
-    for (int i = 0; i < pop->count; i++) {
-      compute_and_print_fitness(&pop->individuals[i], i+1, NULL);
-    }
-    sort_individuals_by_fitness(pop->individuals, pop->count);
+  // double EPSILON = 0.001 * prev_max_fitness;
+  // if (fabs(cur_max_fitness - prev_max_fitness) < EPSILON) {
+  //   stall_generations++;
+  // } else {
+  //   stall_generations = 0;
+  //   prev_max_fitness = cur_max_fitness;
+  // }
+  // if (stall_generations >= 5) {
+  //   printf("[\033[1;33mWarning\033[0m] Stalling detected. Updating seed coverage...\n");
+  //   update_seed(seed_individual, use_argv);
+  //   stall_generations = 0; //reset
+  //   // // 重新计算所有个体的适应度（参考新的 seed_individual）
+  //   // for (int i = 0; i < pop->count; i++) {
+  //   //   compute_and_print_fitness(&pop->individuals[i], i+1, NULL);
+  //   // }
+  //   evaluate_population_normalized(pop, pop->count, seed_individual, 0.7, 0.3);
+  //   sort_individuals_by_fitness(pop->individuals, pop->count);
     
-    // 记录当代最高 fitness 到日志文件
-    FILE* f = fopen(FITNESS_LOG_FILE, "a");
-    if (f) {
-        fprintf(f, "Need to update! Before: %.4f | New fitness: %.4f\n", prev_max_fitness, pop->individuals[0].fitness);
-        fclose(f);
-    } else {
-        perror("fopen fitness log");
-    }
-    prev_max_fitness = pop->individuals[0].fitness;
+  //   // 记录当代最高 fitness 到日志文件
+  //   FILE* f = fopen(FITNESS_LOG_FILE, "a");
+  //   if (f) {
+  //       fprintf(f, "Need to update! Before: %.4f | New fitness: %.4f\n", prev_max_fitness, pop->individuals[0].fitness);
+  //       fclose(f);
+  //   } else {
+  //       perror("fopen fitness log");
+  //   }
+  //   prev_max_fitness = pop->individuals[0].fitness;
     
-  }
+  // }
   
   // printf("[\033[1;32mFitness\033[0m] Max fitness = %.4f\n", cur_max_fitness);
   return 0;
