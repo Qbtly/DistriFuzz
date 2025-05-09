@@ -325,7 +325,7 @@
  
  double prev_max_fitness = 0.0;
  int stall_generations = 0;
- // EXP_ST u8 global_coverage[MAP_SIZE];
+ EXP_ST u8 global_coverage[MAP_SIZE];
  
  
  // 修改为变量并初始化为默认值
@@ -5316,23 +5316,25 @@
 
  
  int count_novel_bits_multi(uint8_t* indiv_cov, int ind_index, uint8_t** seed_covs, int seed_count, int tc_index) {
-   int novel = 0;
- 
-   int seed_union_bits = 0;
- 
-   for (int i = 0; i < MAP_SIZE; i++) {
-     uint8_t seed_union = 0;
-     for (int j = 0; j < seed_count; j++) {
-       seed_union |= seed_covs[j][i];
-     }
- 
-     seed_union_bits += __builtin_popcount(seed_union);
- 
-     uint8_t new_bits = indiv_cov[i] & ~seed_union;
-     int count = __builtin_popcount(new_bits);
-     novel += count;
-   }
-   return novel;
+  //  int novel = 0;
+  //  int seed_union_bits = 0;
+  //  for (int i = 0; i < MAP_SIZE; i++) {
+  //    uint8_t seed_union = 0;
+  //    for (int j = 0; j < seed_count; j++) {
+  //      seed_union |= seed_covs[j][i];
+  //    }
+  //    seed_union_bits += __builtin_popcount(seed_union);
+  //    uint8_t new_bits = indiv_cov[i] & ~seed_union;
+  //    int count = __builtin_popcount(new_bits);
+  //    novel += count;
+  //  }
+  //  return novel;
+  int novel = 0;
+  for (int i = 0; i < MAP_SIZE; i++) {
+    uint8_t new_bits = indiv_cov[i] & ~global_coverage[i];
+    novel += __builtin_popcount(new_bits);
+  }
+  return novel;
  }
  
  
@@ -5344,9 +5346,6 @@
    }
  
    int total_novel = 0;
- 
-   // printf("[\033[1;36mDebug\033[0m] Computing total novel bits for Individual #%d...\n", index);
-   // printf("[\033[1;36mDebug\033[0m] Individual has %d testcases.\n", indiv->tc_count);
  
    for (int i = 0; i < indiv->tc_count; i++) {
      int tc_novel = count_novel_bits_multi(indiv->coverage_r[i], index, seed->coverage_r, seed->tc_count, i);
@@ -5580,9 +5579,7 @@
      indiv->coverage_r[i] = tc->coverage_ptr;
      tc->need_run = 0;
      
-     // for (int i = 0; i < MAP_SIZE; i++) {
-     //   global_coverage[i] = ~virgin_bits[i];
-     // }
+     
      // save_testcase_sample(index, i, tc->data, tc->size);
    }
    // 计算并记录 fitness 值
@@ -5995,7 +5992,9 @@
  
  /* Distri */
  static u8 fuzz_population(Population* pop, char** use_argv) {
- 
+  for (int i = 0; i < MAP_SIZE; i++) {
+       global_coverage[i] = ~virgin_bits[i];
+     }
    printf("[\033[1;35mGA\033[0m] Starting one generation of fuzz_population with %d individual(s)...\n", pop->count);
  
    /* 1. Generate offspring and collect them */
