@@ -43,15 +43,36 @@ def compare_multiple_plot_data(plot_data_files, labels, save_path, title):
 
 compare_multiple_plot_data(
     plot_data_files=[
-        "/home/out-distri/jsc-test/4/plot_data",
-        "/home/out-distri/jsc-test/5/plot_data",
-        "/home/out-distri/jsc-test/7/plot_data"
+        "/home/out-distri/nm/jsc/5/plot_data",
+        "/home/out-distri/n/jsc/5/plot_data",
+        "/home/out-distri/m/jsc/5/plot_data",
+        "/home/out-distri/mn/jsc/5/plot_data",
+        
     ],
     labels=[
-        "Jerry Test 4",
-        "Jerry Test 5",
-        "Jerry Test 7"
+        "JSC 0.7novel 0.3mmd 5",
+        "JSC 1novel 5",
+        "JSC 1mmd 5",
+        "JSC 0.7mmd 0.3novel 5",
     ],
-    save_path="p_jsc_compare.png",
+    save_path="p_jsc_compare5.png",
+    title="JSC Engine: AFL Path Growth Comparison"
+)
+
+compare_multiple_plot_data(
+    plot_data_files=[
+        "/home/out-distri/nm/jerry/5/plot_data",
+        "/home/out-distri/n/jerry/5/plot_data",
+        "/home/out-distri/m/jerry/5/plot_data",
+        "/home/out-distri/mn/jerry/5/plot_data",
+        
+    ],
+    labels=[
+        "Jerry 0.7novel 0.3mmd 5",
+        "Jerry 1novel 5",
+        "Jerry 0.7mmd 0.3novel 5",
+        "Jerry 1mmd 5",
+    ],
+    save_path="p_jerry_compare5.png",
     title="JSC Engine: AFL Path Growth Comparison"
 )

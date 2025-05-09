@@ -331,8 +331,8 @@
  // 修改为变量并初始化为默认值
  char* FITNESS_LOG_FILE = NULL;
  
- double g_alpha = 0.3;
- double g_beta  = 0.7;
+ double g_alpha = 0.0;
+ double g_beta  = 0.0;
  
  double g_max_novel = 0.0;
  double g_max_mmd = 0.0;
@@ -5285,6 +5285,35 @@
    record_generation_fitness();
  }
  
+ void init_alpha_beta_from_env() {
+  char* a = getenv("GA_ALPHA");
+  char* b = getenv("GA_BETA");
+
+  if (a) {
+    double val = atof(a);
+    if (val >= 0.0 && val <= 1.0) {
+      g_alpha = val;
+      printf("[GA] Using g_alpha = %.3f (from GA_ALPHA)\n", g_alpha);
+    }
+  }
+
+  if (b) {
+    double val = atof(b);
+    if (val >= 0.0 && val <= 1.0) {
+      g_beta = val;
+      printf("[GA] Using g_beta = %.3f (from GA_BETA)\n", g_beta);
+    }
+  }
+
+  // 自动归一化（可选）
+  double sum = g_alpha + g_beta;
+  if (sum > 1e-6 && fabs(sum - 1.0) > 1e-6) {
+    g_alpha /= sum;
+    g_beta  /= sum;
+    printf("[GA] Normalized alpha = %.3f, beta = %.3f\n", g_alpha, g_beta);
+  }
+}
+
  
  int count_novel_bits_multi(uint8_t* indiv_cov, int ind_index, uint8_t** seed_covs, int seed_count, int tc_index) {
    int novel = 0;
@@ -9225,6 +9254,7 @@
  
    if (use_ga_mode) {
      init_fitness_log_file();
+     init_alpha_beta_from_env();
      ACTF("Building initial population from queue...");
      seed_individual = build_individual_from_queue();
      if (!seed_individual || seed_individual->tc_count == 0)
