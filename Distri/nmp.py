@@ -89,8 +89,43 @@ plot_trend_comparison(
 )
 
 plot_trend_comparison(
+    "/home/DistriFuzz/Distri/logs/fitness_jerry_nm5.csv",
+    "/home/out-distri/nm/jerry/5/plot_data",
+    "nmp_jerry_5.png",
+    "Jerry: Fitness vs AFL Paths Over Time",
+)
+
+plot_trend_comparison(
     "/home/DistriFuzz/Distri/logs/fitness_jsc_nm15.csv",
     "/home/out-distri/nm/jsc/15/plot_data",
     "nmp_jsc_15.png",
+    "JSC: Fitness vs AFL Paths Over Time",
+)
+
+plot_trend_comparison(
+    "/home/DistriFuzz/Distri/logs/fitness_jerry_nm15.csv",
+    "/home/out-distri/nm/jerry/15/plot_data",
+    "nmp_jerry_15.png",
+    "Jerry: Fitness vs AFL Paths Over Time",
+)
+
+plot_trend_comparison(
+    "/home/DistriFuzz/Distri/logs/fitness_jsc_n15.csv",
+    "/home/out-distri/n/15/plot_data",
+    "np_jsc_15.png",
+    "JSC: Fitness vs AFL Paths Over Time",
+)
+
+plot_trend_comparison(
+    "/home/DistriFuzz/Distri/logs/fitness_jsc_m15.csv",
+    "/home/out-distri/m/15/plot_data",
+    "mp_jsc_15.png",
+    "JSC: Fitness vs AFL Paths Over Time",
+)
+
+plot_trend_comparison(
+    "/home/DistriFuzz/Distri/logs/fitness_jsc_mn15.csv",
+    "/home/out-distri/mn/15/plot_data",
+    "mnp_jsc_15.png",
     "JSC: Fitness vs AFL Paths Over Time",
 )
