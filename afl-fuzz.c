@@ -302,6 +302,7 @@
    int tc_count;
    double fitness; /* We'll store the computed fitness (MMD distance, etc.) */
    uint8_t** coverage_r;
+   int interesting_count; /* Number of interesting test cases */
  } Individual;
  
  /* A population is just an array of individuals. */
@@ -341,7 +342,7 @@
  static double prev_max_novel = 0.0;
  static double prev_max_mmd = 0.0;
  
- 
+ u32 interesting_tc_count = 0;
  
  
  /* Fuzzing stages */
@@ -4818,27 +4819,8 @@
  
    fault = run_target(argv, exec_tmout);
  
-   // FILE* f = fopen(FITNESS_LOG_FILE, "a");
-   // if (!f) {
-   //   perror("fopen FITNESS_LOG_FILE");
-   //   return 0;
-   // }
- 
-   // 打印带颜色的 fault 类型（红色）
-   // const char* fault_str[] = {
-   //   "FAULT_NONE", "FAULT_TMOUT", "FAULT_CRASH",
-   //   "FAULT_ERROR", "FAULT_NOINST", "FAULT_NOBITS"
-   // };
- 
    ret_fault = fault;
-   // if (fault != FAULT_NONE) {
-     // mark = true;
-     // ret_fault = fault;
-     // fprintf(f, "\033[1;31m[Fault]\033[0m Type = %s (%u)\n", fault_str[fault], fault);
-   // }
-   // fclose(f);
- 
- 
+
    if (stop_soon) return 1;
  
    if (fault == FAULT_TMOUT) {
@@ -4863,7 +4845,11 @@
  
    /* This handles FAULT_ERROR for us: */
  
-   queued_discovered += save_if_interesting(argv, out_buf, len, fault);
+  //  queued_discovered += save_if_interesting(argv, out_buf, len, fault);
+  u8 saved = save_if_interesting(argv, out_buf, len, fault);
+  queued_discovered += saved;
+
+if (saved) interesting_tc_count++;  // 累计全局计数
  
    if (!(stage_cur % stats_update_freq) || stage_cur + 1 == stage_max)
      show_stats();
@@ -5530,7 +5516,8 @@
  
  static void run_individual(Individual* indiv, int index, char** use_argv) {
    printf("[\033[1;34mInfo\033[0m] Running individual %d with %d testcases...\n", index, indiv->tc_count);
- 
+   indiv->interesting_count = 0;         // ← 初始化很重要
+   interesting_tc_count = 0;             // ← 同时清空全局统计变量
    // printf("  [\033[1;36mTotal Testcase %d\033[0m] \n", indiv->tc_count);
    for (int i = 0; i < indiv->tc_count; i++) {
      TestCase* tc = &indiv->testcases[i];
@@ -5542,17 +5529,6 @@
      }
  
      u8 ret = common_fuzz_stuff(use_argv, tc->data, tc->size);
- 
-     // if (mark) {
-     //   FILE* f = fopen(FITNESS_LOG_FILE, "a");
-     //   if (!f) {
-     //     perror("fopen FITNESS_LOG_FILE");
-     //     return 0;
-     //   }
-     //   fprintf(f, "Individual %d Testcase #%d ...\n ", index, i);
-     //   fclose(f);
-     //   mark = false;
-     // }
      
  
      if (ret == 1) {
@@ -5578,10 +5554,10 @@
      memcpy(tc->coverage_ptr, trace_bits, MAP_SIZE);
      indiv->coverage_r[i] = tc->coverage_ptr;
      tc->need_run = 0;
-     
-     
-     // save_testcase_sample(index, i, tc->data, tc->size);
    }
+    indiv->interesting_count = interesting_tc_count;  // 赋值
+    interesting_tc_count = 0;                         // 清零供下一个 individual 使用
+
    // 计算并记录 fitness 值
    compute_and_print_fitness(indiv, index, NULL);
  
@@ -5673,6 +5649,23 @@
  
    // 可选打印 top N fitness
    printf("[\033[1;32mTop\033[0m] Best fitness after sort: %.4f\n", individuals[0].fitness);
+ }
+
+ void sort_individuals_by_interest(Individual* individuals, int count) {
+   printf("[\033[1;34mSort\033[0m] Sorting %d individuals by fitness (descending)...\n", count);
+ 
+   for (int i = 0; i < count - 1; i++) {
+     for (int j = i + 1; j < count; j++) {
+       if (individuals[j].interesting_count > individuals[i].interesting_count) {
+         Individual tmp = individuals[i];
+         individuals[i] = individuals[j];
+         individuals[j] = tmp;
+       }
+     }
+   }
+ 
+   // 可选打印 top N fitness
+   printf("[\033[1;32mTop\033[0m] Best interest after sort: %.4f\n", individuals[0].interesting_count);
  }
  
  void check_stall_and_update(Population* pop, Individual* seed_individual, char** use_argv) {
@@ -5956,6 +5949,7 @@
    Individual clone;
    clone.tc_count = src->tc_count;
    clone.fitness = src->fitness;
+   clone.interesting_count = 0;
  
    // 分配 testcase 和 coverage_r 空间
    clone.testcases = ck_alloc(sizeof(TestCase) * clone.tc_count);
@@ -6012,8 +6006,6 @@
      printf("[\033[1;36mCrossover\033[0m] Creating offspring %d from parent %d and %d\n", i, p1, p2);
  
      crossover_individuals(&pop->individuals[p1], &pop->individuals[p2], &offspring[i]);
-     // compute_and_print_fitness(&offspring[i], i+1, "Offspring");
-     // double original_fitness = offspring[i].fitness;
      /* Mutate child testcases */
      printf("[\033[1;33mMutation\033[0m] Mutating new individual %d\n", i);
      for (int t = 0; t < offspring[i].tc_count; t++) {
@@ -6029,9 +6021,6 @@
      }
      // 执行 run + fitness
      run_individual(&offspring[i], i+1, use_argv);
-     // if (offspring[i].fitness < original_fitness) {
-     //   printf("  [\033[0;90mDegraded\033[0m] Mutation reduced fitness from %.4f to %.4f\n", original_fitness, offspring[i].fitness);
-     // }
    }
  
    /* 4. Merge and sort: keep top POP_SIZE */
@@ -6043,7 +6032,6 @@
    // 拷贝原始种群
    for (int i = 0; i < pop->count; i++) {
      merged[i] = clone_individual(&pop->individuals[i]);
-     // printf("  [\033[0;36mMerged\033[0m] Original Individual %d | Fitness: %.4f\n", i, merged[i].fitness);
      destroy_individual(&pop->individuals[i]);
    }
    ck_free(pop->individuals);
@@ -6051,27 +6039,29 @@
    // 拷贝 offspring
    for (int i = 0; i < offspring_count; i++) {
      merged[pop->count + i] = clone_individual(&offspring[i]);
-     // printf("  [\033[0;36mMerged\033[0m] Offspring Individual %d | Fitness: %.4f\n", pop->count + i, merged[pop->count + i].fitness);
      destroy_individual(&offspring[i]);
    }
    ck_free(offspring);
  
-   // === 统一归一化所有个体 fitness ===
-   // evaluate_population_normalized(merged, total, seed_individual, 0.7, 0.3);
- 
    // 排序所有个体
-   sort_individuals_by_fitness(merged, total);
+   if (g_alpha == 0.0 && g_beta == 0.0) {
+       // 仅使用兴趣度排序
+       sort_individuals_by_interest(merged, total);
+    } else {
+    // 综合适应度排序
+    sort_individuals_by_fitness(merged, total);
+  }
  
    // 只保留前 POP_SIZE 个
    pop->individuals = ck_alloc(sizeof(Individual) * POP_SIZE);
    pop->count = POP_SIZE;
    for (int i = 0; i < POP_SIZE; i++) {
-     // pop->individuals[i] = clone_individual(&merged[i]);
-     if (i < POP_SIZE/2)
-       pop->individuals[i] = clone_individual(&merged[i]);
-     else
-       // pop->individuals[i] = clone_individual(&merged[i+3]);
-       pop->individuals[i] = clone_individual(&merged[i]);
+     pop->individuals[i] = clone_individual(&merged[i]);
+    //  if (i < POP_SIZE/2)
+    //    pop->individuals[i] = clone_individual(&merged[i]);
+    //  else
+    //    // pop->individuals[i] = clone_individual(&merged[i+3]);
+    //    pop->individuals[i] = clone_individual(&merged[i]);
      printf("  [\033[1;32mKeep\033[0m] Individual %d | Fitness: %.4f\n", i, merged[i].fitness);
    }
  
@@ -6085,8 +6075,10 @@
  
    // 记录当代最高 fitness 到日志文件
    record_generation_fitness();
-   check_stall_and_update(pop, seed_individual, use_argv);
- 
+   if (g_beta != 0.0) {
+     check_stall_and_update(pop, seed_individual, use_argv);
+   }
+  
    return 0;
    
  }
