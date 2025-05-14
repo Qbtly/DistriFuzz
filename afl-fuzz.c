@@ -285,6 +285,28 @@
  static s32 interesting_32[] = { INTERESTING_8, INTERESTING_16, INTERESTING_32 };
  
  /* Distri */
+size_t bitflip_bits(u8* in_buf, u32 len, u8*** mutated_bufs);
+size_t bitflip_bytes(u8* in_buf, u32 len, u8*** mutated_bufs);
+size_t bitflip_words(u8* in_buf, u32 len, u8*** mutated_bufs);
+size_t arith_8bit(u8* in_buf, u32 len, u8*** mutated_bufs);
+size_t interest_8bit(u8* in_buf, u32 len, u8*** mutated_bufs);
+size_t havoc_byte(u8* in_buf, u32 len, u8*** mutated_bufs);
+
+typedef size_t (*MutateFunc)(u8* in_buf, u32 len, u8*** mutated_bufs);
+
+static MutateFunc mutate_funcs[] = {
+  bitflip_bits,
+  bitflip_bytes,
+  bitflip_words,
+  arith_8bit,
+  interest_8bit,
+  havoc_byte
+};
+
+#define MUTATE_FUNC_COUNT (sizeof(mutate_funcs) / sizeof(MutateFunc))
+
+
+
  /* A single test case (analogous to a gene in GA). */
  typedef struct {
    /* We'll store the file content. Alternatively, you can store just a path. */
@@ -5744,6 +5766,121 @@ if (saved) interesting_tc_count++;  // 累计全局计数
    printf("[\033[1;33mWarning\033[0m] No need to update seed......\n");
  }
  
+ /*-----------------------------------------------Mutation-----------------------------------------------*/
+size_t bitflip_bits(u8* in_buf, u32 len, u8*** mutated_bufs) {
+  if (!in_buf || len == 0) return 0;
+
+  // 随机选择翻转的位数：1、2 或 4
+  u8 flip_bits = (UR(3) == 0) ? 1 : (UR(2) == 0 ? 2 : 4);  // 1/2/4 的概率近似均等
+
+  // 检查翻转合法性
+  u32 max_bit = (len << 3);
+  if (max_bit < flip_bits) return 0;
+
+  u32 bit_idx = UR(max_bit - (flip_bits - 1));  // 起始位索引
+
+  // 申请返回容器
+  u8** results = ck_alloc(sizeof(u8*));
+  u8* mutated = ck_alloc_nozero(len);
+  memcpy(mutated, in_buf, len);
+
+  // 执行位翻转
+  for (u8 i = 0; i < flip_bits; i++) {
+    u32 curr_bit = bit_idx + i;
+    u32 byte_idx = curr_bit >> 3;
+    u8  bit_mask = 128 >> (curr_bit & 7);
+    mutated[byte_idx] ^= bit_mask;
+  }
+
+  results[0] = mutated;
+  *mutated_bufs = results;
+  return 1;
+}
+
+
+size_t bitflip_bytes(u8* in_buf, u32 len, u8*** mutated_bufs) {
+  if (!in_buf || len == 0) return 0;
+
+  u8** results = ck_alloc(sizeof(u8*));
+  u8* mutated = ck_alloc_nozero(len);
+  memcpy(mutated, in_buf, len);
+
+  u32 byte_idx = UR(len);
+  mutated[byte_idx] ^= 0xFF;
+
+  results[0] = mutated;
+  *mutated_bufs = results;
+  return 1;
+}
+
+size_t bitflip_words(u8* in_buf, u32 len, u8*** mutated_bufs) {
+  if (!in_buf || len < 2) return 0;
+
+  u8** results = ck_alloc(sizeof(u8*));
+  u8* mutated = ck_alloc_nozero(len);
+  memcpy(mutated, in_buf, len);
+
+  if (len >= 4 && UR(2)) {
+    u32 idx = UR(len - 3);
+    *(u32*)(mutated + idx) ^= 0xFFFFFFFF;
+  } else {
+    u32 idx = UR(len - 1);
+    *(u16*)(mutated + idx) ^= 0xFFFF;
+  }
+
+  results[0] = mutated;
+  *mutated_bufs = results;
+  return 1;
+}
+
+
+size_t arith_8bit(u8* in_buf, u32 len, u8*** mutated_bufs) {
+  if (!in_buf || len == 0) return 0;
+
+  u8** results = ck_alloc(sizeof(u8*));
+  u8* mutated = ck_alloc_nozero(len);
+  memcpy(mutated, in_buf, len);
+
+  u32 idx = UR(len);
+  s32 delta = (UR(2) == 0 ? 1 : -1) * (1 + UR(ARITH_MAX));  // 加或减
+
+  mutated[idx] = (u8)(mutated[idx] + delta);
+  results[0] = mutated;
+  *mutated_bufs = results;
+  return 1;
+}
+
+size_t interest_8bit(u8* in_buf, u32 len, u8*** mutated_bufs) {
+  if (!in_buf || len == 0) return 0;
+
+  u8** results = ck_alloc(sizeof(u8*));
+  u8* mutated = ck_alloc_nozero(len);
+  memcpy(mutated, in_buf, len);
+
+  u32 idx = UR(len);
+  mutated[idx] = interesting_8[UR(sizeof(interesting_8))];
+
+  results[0] = mutated;
+  *mutated_bufs = results;
+  return 1;
+}
+
+
+size_t havoc_byte(u8* in_buf, u32 len, u8*** mutated_bufs) {
+  if (!in_buf || len == 0) return 0;
+
+  u8** results = ck_alloc(sizeof(u8*));
+  u8* mutated = ck_alloc_nozero(len);
+  memcpy(mutated, in_buf, len);
+
+  u32 idx = UR(len);
+  mutated[idx] ^= 1 + UR(255);  // XOR 随机值避免 no-op
+
+  results[0] = mutated;
+  *mutated_bufs = results;
+  return 1;
+}
+
  
  Population* init_population(Individual* seed, int pop_size, char** use_argv) {
    if (!seed || seed->tc_count == 0) {
@@ -5762,44 +5899,66 @@ if (saved) interesting_tc_count++;  // 累计全局计数
  
      Individual* ind = &pop->individuals[i];
      init_individual(ind, seed->tc_count);
-     // ind->tc_count = seed->tc_count;
-     // ind->testcases = ck_alloc(sizeof(TestCase) * ind->tc_count);
-     // ind->coverage_r = ck_alloc(sizeof(uint8_t*) * ind->tc_count);
-     // ind->fitness = 0.0;
  
      for (int j = 0; j < seed->tc_count; j++) {
        TestCase* tc = &ind->testcases[j];
        char* mutated_data = NULL;
        size_t mutated_len = 0;
-       char* mutated_data0 = NULL;
-       size_t mutated_len0 = 0;
-       int rand_idx = rand() % seed->tc_count;
-       // 🌱 使用当前 seed testcase 生成一个新样本（parse + fuzz）
-       int parsed = parse_py(
-         (char*)seed->testcases[j].data,
-         seed->testcases[j].size,
-         (char*)seed->testcases[rand_idx].data,
-         seed->testcases[rand_idx].size
-       );
-       // printf("    [\033[1;33mparse_py\033[0m] Testcase %d generated %d.\n", j, parsed);
+       
+      // 随机选择一个变异策略
+      u32 strat_id = UR(MUTATE_FUNC_COUNT);
+      MutateFunc mutate = mutate_funcs[strat_id];
+      u8** candidates = NULL;
+      size_t count = mutate(
+        seed->testcases[j].data,
+        seed->testcases[j].size,
+        &candidates
+      );
+
+      if (count == 0 || !candidates) {
+        // fallback: 拷贝原始 seed 样本
+        mutated_len = seed->testcases[j].size;
+        mutated_data = ck_alloc(mutated_len);
+        memcpy(mutated_data, seed->testcases[j].data, mutated_len);
+      } else {
+        // 从中随机选一个变异样本
+        u32 sel = rand() % count;
+        mutated_len = seed->testcases[j].size;
+        mutated_data = ck_alloc(mutated_len);
+        memcpy(mutated_data, candidates[sel], mutated_len);
+
+        // 释放所有候选样本
+        for (size_t k = 0; k < count; k++) ck_free(candidates[k]);
+        ck_free(candidates);
+      }
+      // python parse+fuzz
+      //  char* mutated_data0 = NULL;
+      //  size_t mutated_len0 = 0;
+      //  int rand_idx = rand() % seed->tc_count;
+      //  // 🌱 使用当前 seed testcase 生成一个新样本（parse + fuzz）
+      //  int parsed = parse_py(
+      //    (char*)seed->testcases[j].data,
+      //    seed->testcases[j].size,
+      //    (char*)seed->testcases[rand_idx].data,
+      //    seed->testcases[rand_idx].size
+      //  ); 
+      //  if (parsed > 1) {
+      //    fuzz_py(&mutated_data0, &mutated_len0);
+      //  }
  
-       if (parsed > 1) {
-         fuzz_py(&mutated_data0, &mutated_len0);
-       }
- 
-       if (!mutated_data0 || mutated_len0 == 0) {
-         // 复制种子数据
-         // printf("    [\033[1;33mFallback\033[0m] Testcase %d: Mutation failed, using seed copy.\n", j);
-         mutated_len = seed->testcases[j].size;
-         mutated_data = ck_alloc(mutated_len);
-         memcpy(mutated_data, seed->testcases[j].data, mutated_len);
-       } else {
-         // printf("    [\033[1;32mMutated\033[0m] Testcase %d: Generated %zu bytes.\n", j, mutated_len0);
-         mutated_len = mutated_len0;
-         mutated_data = ck_alloc(mutated_len);
-         memcpy(mutated_data, mutated_data0, mutated_len);
+      //  if (!mutated_data0 || mutated_len0 == 0) {
+      //    // 复制种子数据
+      //    // printf("    [\033[1;33mFallback\033[0m] Testcase %d: Mutation failed, using seed copy.\n", j);
+      //    mutated_len = seed->testcases[j].size;
+      //    mutated_data = ck_alloc(mutated_len);
+      //    memcpy(mutated_data, seed->testcases[j].data, mutated_len);
+      //  } else {
+      //    // printf("    [\033[1;32mMutated\033[0m] Testcase %d: Generated %zu bytes.\n", j, mutated_len0);
+      //    mutated_len = mutated_len0;
+      //    mutated_data = ck_alloc(mutated_len);
+      //    memcpy(mutated_data, mutated_data0, mutated_len);
          
-       }
+      //  }
        // 更新 testcase
        tc->data = (uint8_t*)mutated_data;
        tc->size = mutated_len;
@@ -5901,48 +6060,72 @@ if (saved) interesting_tc_count++;  // 累计全局计数
  
    // printf("[\033[1;36mCrossOver\033[0m] Child generation complete.\n");
  }
+
  
+
+//  void mutate_testcase(TestCase* tc, TestCase* tc2) {
+//   if (!tc || !tc->data || tc->size == 0) {
+//     fprintf(stderr, "    [\033[0;31mError\033[0m] mutate_testcase: Invalid testcase.\n");
+//     return;
+//   }
+//   tc->need_run = 1;
+
+//   // python变异策略，比如 parse + fuzz
+//   char* mutated_data = NULL;
+//   size_t mutated_len = 0;
+//   int attempts = 3;
+//   while (attempts-- > 0) {
+//     int parsed = parse_py((char*)tc->data, tc->size,
+//     (char*)tc2->data, tc2->size);
+//     fuzz_py(&mutated_data, &mutated_len);
+//     if (mutated_data && mutated_len > 0) break;
+//   }
+
+//   if (!mutated_data || mutated_len == 0) {
+//     return;
+//   }
+
+//   // 替换原样本
+//   ck_free(tc->data);
+//   tc->data = (u8*)ck_alloc(mutated_len);
+//   memcpy(tc->data, mutated_data, mutated_len);
+//   tc->size = mutated_len;
+//  }
+
  void mutate_testcase(TestCase* tc, TestCase* tc2) {
-   if (!tc || !tc->data || tc->size == 0) {
-     fprintf(stderr, "    [\033[0;31mError\033[0m] mutate_testcase: Invalid testcase.\n");
-     return;
-   }
-   tc->need_run = 1;
-   // printf("  [\033[1;34mMutate\033[0m] Starting mutation for testcase of size %zu bytes...\n", tc->size);
- 
-   char* mutated_data = NULL;
-   size_t mutated_len = 0;
- 
-   
-   int attempts = 3;
-   while (attempts-- > 0) {
-     int parsed = parse_py((char*)tc->data, tc->size,
-     (char*)tc2->data, tc2->size);
-     // printf("  [\033[1;36mParseOK\033[0m] parse_py returned %d. Proceeding with fuzz_py...\n", parsed);
-     fuzz_py(&mutated_data, &mutated_len);
-     if (mutated_data && mutated_len > 0) break;
-   }
- 
-   if (!mutated_data || mutated_len == 0) {
-     // printf("  [\033[1;33mMutateFallback\033[0m] fuzz_py failed or returned empty data. Keeping original.\n");
-     return;
-   }
- 
-   // printf("  [\033[1;32mMutateOK\033[0m] Generated mutated data of %zu bytes. Replacing original testcase.\n", mutated_len);
- 
-   // 替换当前 TestCase 的数据
-   // printf("  [\033[0;31mFree\033[0m] Freeing original testcase data (%p, %zu bytes)...\n", tc->data, tc->size);
-   ck_free(tc->data);
- 
-   tc->data = (uint8_t*)ck_alloc(mutated_len);
-   memcpy(tc->data, mutated_data, mutated_len);
-   tc->size = mutated_len;
- 
-   // printf("  [\033[0;31mFree\033[0m] Freeing fuzz_py malloc result (%p, %zu bytes)...\n", mutated_data, mutated_len);
-   // ck_free(mutated_data);  // fuzz_py 用 malloc 分配的
- 
-   // printf("  [\033[1;32mMutated\033[0m] Testcase successfully mutated. New size = %zu bytes.\n", mutated_len);
- }
+  if (!tc || !tc->data || tc->size == 0) {
+    fprintf(stderr, "    [\033[0;31mError\033[0m] mutate_testcase: Invalid testcase.\n");
+    return;
+  }
+  tc->need_run = 1;
+
+  // 随机选择一个变异策略
+  u32 strat_id = UR(MUTATE_FUNC_COUNT);
+  MutateFunc mutate = mutate_funcs[strat_id];
+
+  // 调用对应策略生成一个样本
+  u8** mutated_samples = NULL;
+  size_t count = mutate(tc->data, tc->size, &mutated_samples);
+
+  if (count == 0 || !mutated_samples) {
+    fprintf(stderr, "    [\033[0;31mError\033[0m] mutate_testcase: Strategy %u failed.\n", strat_id);
+    return;
+  }
+
+  // 替换 testcase 数据
+  u8* mutated_data = mutated_samples[0];
+  size_t mutated_len = tc->size;
+
+  ck_free(tc->data);
+  tc->data = (u8*)ck_alloc(mutated_len);
+  memcpy(tc->data, mutated_data, mutated_len);
+  tc->size = mutated_len;
+
+  // 清理内存
+  ck_free(mutated_samples[0]);
+  ck_free(mutated_samples);
+}
+
  
  Individual clone_individual(const Individual* src) {
    // printf("[Clone] Cloning individual with %d testcases...\n", src->tc_count);
